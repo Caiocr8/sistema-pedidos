@@ -1,0 +1,52 @@
+/* App.css */
+
+.container {
+  width: 100%;
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 1rem;
+  background-color: #fff8f0;
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.05);
+}
+
+.topbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e1c7b7;
+}
+
+.topbar img {
+  height: 6.5rem;
+  width: auto;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.topbar nav a {
+  color: #fff8f0;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 1.1rem;
+  transition: color 0.2s ease;
+}
+
+@media (max-width: 500px) {
+  .container {
+    padding: 0.5rem;
+  }
+
+  .topbar img {
+    height: 5rem;
+  }
+
+  .topbar nav a {
+    font-size: 1rem;
+  }
+}
