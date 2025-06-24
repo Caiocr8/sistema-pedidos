@@ -12,6 +12,9 @@ export default defineConfig({
       '127.0.0.1',
       'bee9-2804-14d-be88-9a83-00-4250.ngrok-free.app' // ← adicione seu domínio ngrok aqui
     ],
-    host: true // permite acesso externo
+    host: true,
+    proxy: {
+      '/print': 'http://localhost:3001'
+    } // permite acesso externo
   }
 });

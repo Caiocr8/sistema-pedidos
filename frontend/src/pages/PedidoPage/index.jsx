@@ -57,6 +57,8 @@ function PedidoPage() {
     const menuLocal = localStorage.getItem('menu');
     if (menuLocal) {
       setMenu(JSON.parse(menuLocal));
+    } else {
+      setMenu([]); // ou carregar de uma collection no Firebase
     }
 
     const handleMenuUpdate = (e) => {
@@ -116,17 +118,24 @@ function PedidoPage() {
     };
 
     try {
+      await fetch('http://localhost:3001/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pedido)
+      });
+
       await addDoc(collection(db, 'pedidos'), pedido);
       setOrderNumber(orderNumber + 1);
       setCarrinho([]);
-      setModalMensagem('Pedido salvo com sucesso!');
+      setModalMensagem('Pedido salvo e enviado para impressão!');
     } catch (error) {
-      console.error('Erro ao salvar pedido:', error);
-      setModalMensagem('Erro ao salvar pedido.');
+      console.error('Erro ao finalizar pedido:', error);
+      setModalMensagem('Erro ao finalizar pedido.');
     } finally {
       setMostrarConfirmacao(true);
     }
   };
+
 
   const abrirConfirmar = (tipo) => {
     setConfirmarTipo(tipo);
