@@ -47,7 +47,6 @@ body {
 }
 
 .container {
-    max-width: 720px;
     margin: 20px auto;
     padding: 20px;
     background: #fff8e7;

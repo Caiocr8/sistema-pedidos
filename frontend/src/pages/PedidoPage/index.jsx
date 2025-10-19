@@ -7,6 +7,7 @@ import './index.css';
 function PedidoPage() {
   const [menu, setMenu] = useState([]);
   const [carrinho, setCarrinho] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [adicionais, setAdicionais] = useState({});
   const [mostrarAdicionais, setMostrarAdicionais] = useState({});
   const [pesquisa, setPesquisa] = useState('');
@@ -16,7 +17,6 @@ function PedidoPage() {
   const [modalMensagem, setModalMensagem] = useState('');
   const [mostrarConfirmacao, setMostrarConfirmacao] = useState(false);
   const buscaRef = useRef(null);
-
 
   useEffect(() => {
     buscaRef.current?.focus();
@@ -28,8 +28,10 @@ function PedidoPage() {
         const max = numeros.length ? Math.max(...numeros) : 0;
         setOrderNumber(max + 1);
 
-        const menuFirebase = await carregarMenu();
-        setMenu(menuFirebase);
+        // usa cache local
+        const menuSalvo = localStorage.getItem('menu');
+        const data = menuSalvo ? JSON.parse(menuSalvo) : [];
+        setMenu(data);
       } catch (err) {
         console.error('Erro ao carregar dados iniciais:', err);
       }
@@ -37,9 +39,8 @@ function PedidoPage() {
 
     carregarDadosIniciais();
 
-    const handleMenuUpdate = (e) => {
-      setMenu(e.detail);
-    };
+
+    const handleMenuUpdate = (e) => setMenu(e.detail);
     window.addEventListener('menuAtualizado', handleMenuUpdate);
     return () => window.removeEventListener('menuAtualizado', handleMenuUpdate);
   }, []);
