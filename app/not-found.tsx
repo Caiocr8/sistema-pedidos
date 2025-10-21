@@ -1,127 +1,121 @@
+// app/not-found.tsx
 'use client';
 
+import { Box, Container, Typography } from '@mui/material';
+import { Home, HelpCircle } from 'lucide-react';
+import Button from '@/app/components/ui/button';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Home, ArrowLeft } from 'lucide-react';
-import Button from '@/app/components/ui/button'; // ajuste o caminho se necessário
-import { Box, Typography, Container } from '@mui/material';
 
 export default function NotFound() {
+  const router = useRouter();
+
   return (
     <Box
       sx={{
         minHeight: '100vh',
-        bgcolor: '#FAEBD7',
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        textAlign: 'center',
+        bgcolor: '#FAEBD7',
         px: 2,
+        position: 'relative',
       }}
     >
-      {/* Header */}
-      <Typography
-        variant="h4"
-        sx={{
-          position: 'absolute',
-          top: 20,
-          left: 0,
-          right: 0,
-          textAlign: 'center',
-          fontFamily: 'Caveat, cursive',
-          fontWeight: 700,
-          color: '#4E2C0A',
-        }}
-      >
-        Maria Bonita
-      </Typography>
-
-      <Container maxWidth="sm" sx={{ mt: 10 }}>
-        <Typography
-          variant="h1"
-          sx={{
-            fontSize: { xs: '5rem', md: '7rem' },
-            fontWeight: 800,
-            color: '#8B4513',
-            mb: 1,
-          }}
-        >
-          404
-        </Typography>
-
-        <Typography
-          variant="h5"
-          sx={{
-            fontWeight: 600,
-            color: '#5C4033',
-            mb: 2,
-          }}
-        >
-          Página não encontrada
-        </Typography>
-
-        <Typography
-          sx={{
-            color: '#7A5542',
-            mb: 4,
-          }}
-        >
-          Ops! Parece que essa tapioca não está no cardápio. <br />
-          A página que você procura pode ter sido movida ou removida.
-        </Typography>
-
-        {/* Ações */}
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            gap: 2,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Link href="/" passHref>
-            <Button
-              variant="contained"
-              color="warning"
-              startIcon={<Home size={18} />}
-              sx={{
-                bgcolor: '#C68642',
-                '&:hover': { bgcolor: '#A36A2F' },
-              }}
-            >
-              Voltar para o Início
-            </Button>
-          </Link>
-
-          <Button
-            variant="outlined"
-            color="inherit"
-            startIcon={<ArrowLeft size={18} />}
-            onClick={() => window.history.back()}
+      <Container maxWidth="sm">
+        <Box sx={{ textAlign: 'center' }}>
+          {/* 404 */}
+          <Typography
+            variant="h1"
             sx={{
-              borderColor: '#A36A2F',
-              color: '#A36A2F',
-              '&:hover': {
-                bgcolor: '#F5DEB3',
-                borderColor: '#A36A2F',
-              },
+              fontSize: { xs: '6rem', sm: '8rem' },
+              fontWeight: 700,
+              color: '#C68642',
+              mb: 2,
+              lineHeight: 1,
             }}
           >
-            Voltar
-          </Button>
+            404
+          </Typography>
+
+          {/* Título */}
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 600,
+              color: '#4E2C0A',
+              mb: 2,
+            }}
+          >
+            Página não encontrada
+          </Typography>
+
+          {/* Descrição */}
+          <Typography
+            sx={{
+              color: '#7A5C40',
+              mb: 5,
+              maxWidth: 400,
+              mx: 'auto',
+            }}
+          >
+            Parece que você se perdeu nas tapiocas! A página que você procura não existe ou foi removida.
+          </Typography>
+
+          {/* Botões */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 300, mx: 'auto' }}>
+
+            <Link href="/">
+              <Button
+                variant="contained"
+                color="warning"
+                fullWidth
+                startIcon={<Home size={20} />}
+                sx={{
+                  bgcolor: '#C68642',
+                  '&:hover': { bgcolor: '#A36A2F' },
+                }}
+              >
+                Voltar para Início
+              </Button>
+            </Link>
+
+            <Link href="/painel/ajuda">
+              <Button
+                variant="outlined"
+                color="warning"
+                fullWidth
+                onClick={() => router.push('/ajuda')}
+                startIcon={<HelpCircle size={20} />}
+                sx={{
+                  borderColor: '#C68642',
+                  color: '#C68642',
+                  '&:hover': {
+                    borderColor: '#A36A2F',
+                    bgcolor: 'rgba(198,134,66,0.08)',
+                  },
+                }}
+              >
+                Preciso de Ajuda
+              </Button>
+            </Link>
+          </Box>
         </Box>
       </Container>
 
+      {/* Footer */}
       <Typography
         variant="body2"
         sx={{
           position: 'absolute',
-          bottom: 12,
+          bottom: 20,
+          left: 0,
+          right: 0,
+          textAlign: 'center',
           color: '#8B5E3C',
         }}
       >
-        © {new Date().getFullYear()} Maria Bonita — Bonitona das Tapiocas
+        &copy; 2025 Maria Bonita
       </Typography>
     </Box>
   );

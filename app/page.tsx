@@ -1,12 +1,23 @@
+// app/page.tsx
 'use client';
 
 import { Box, Typography, Paper, Container } from '@mui/material';
 import { LogIn, HelpCircle, UtensilsCrossed } from 'lucide-react';
 import Button from '@/app/components/ui/button';
 import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 
 export default function HomePage() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <Box
@@ -68,7 +79,7 @@ export default function HomePage() {
               fontWeight: 500,
             }}
           >
-            Bonitona das Tapiocas 
+            Bonitona das Tapiocas 🥞
           </Typography>
 
           <Typography
@@ -97,7 +108,7 @@ export default function HomePage() {
                 py: 1.5,
                 fontSize: '1.1rem',
                 fontWeight: 600,
-                '&:hover': { 
+                '&:hover': {
                   bgcolor: '#A36A2F',
                   transform: 'translateY(-2px)',
                   boxShadow: '0 6px 20px rgba(198,134,66,0.4)',
@@ -133,6 +144,7 @@ export default function HomePage() {
             </Button>
           </Box>
 
+          {/* Rodapé */}
           <Typography
             variant="caption"
             sx={{
@@ -141,7 +153,7 @@ export default function HomePage() {
               color: '#A67C52',
             }}
           >
-            © 2025 Maria Bonita • Feito com ❤️ e massa de tapioca
+            &copy; 2025 Maria Bonita &bull; Feito com ❤️ e massa de tapioca
           </Typography>
         </Paper>
       </Container>

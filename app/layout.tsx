@@ -17,6 +17,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Sistema Pedidos",
   description: "Gerenciamento de pedidos.",
+  openGraph: {
+    title: "Sistema Pedidos",
+    description: "Gerenciamento de pedidos.",
+    images: [
+      {
+        url: '@/app/favicon.ico',
+        width: 800,
+        height: 600,
+      }
+    ],
+  }
 };
 
 export default function RootLayout({
@@ -25,9 +36,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="pt-br">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <MuiProvider>{children}</MuiProvider>
       </body>
