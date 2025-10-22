@@ -1,162 +1,165 @@
-// app/page.tsx
 'use client';
 
-import { Box, Typography, Paper, Container } from '@mui/material';
+import { useEffect } from 'react';
+import { Box, Typography, Paper, Container, useTheme } from '@mui/material';
 import { LogIn, HelpCircle, UtensilsCrossed } from 'lucide-react';
 import Button from '@/app/components/ui/button';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useUserStore } from '@/app/store/user-store';
 
 export default function HomePage() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const theme = useTheme();
+  const { user, isAuthReady } = useUserStore();
 
+  // Redireciona usuário logado para o dashboard
+  // IMPORTANTE: Só redireciona quando isAuthReady é true E user existe
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (isAuthReady && user) {
+      router.replace('/painel/app/dashboard');
+    }
+  }, [isAuthReady, user, router]);
 
-  if (!mounted) {
+  // IMPORTANTE: Não bloqueia renderização enquanto verifica auth
+  // Só retorna null se já confirmou que user existe (evita flash)
+  if (user && isAuthReady) {
     return null;
   }
 
+  // Renderiza a Landing Page
   return (
-    <Box
+    <Container
+      maxWidth="sm"
       sx={{
-        minHeight: '100vh',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        bgcolor: '#FAEBD7',
-        px: 2,
-        backgroundImage: 'radial-gradient(circle, #F5DEB3 1px, transparent 1px)',
-        backgroundSize: '30px 30px',
+        minHeight: '100vh',
+        py: 4,
       }}
     >
-      <Container maxWidth="sm">
-        <Paper
-          elevation={12}
+      <Paper
+        elevation={12}
+        sx={{
+          p: { xs: 4, sm: 6 },
+          borderRadius: 5,
+          textAlign: 'center',
+          bgcolor: 'background.paper',
+          boxShadow: theme.shadows[12],
+        }}
+      >
+        {/* Logo/Ícone */}
+        <Box
           sx={{
-            p: 6,
-            borderRadius: 5,
-            textAlign: 'center',
-            bgcolor: '#FFF9F2',
-            boxShadow: '0 12px 40px rgba(78,44,10,0.2)',
+            display: 'inline-flex',
+            p: 3,
+            borderRadius: '50%',
+            bgcolor: 'primary.main',
+            mb: 3,
+            boxShadow: theme.palette.mode === 'light'
+              ? '0 4px 12px rgba(198, 134, 66, 0.3)'
+              : '0 4px 12px rgba(230, 185, 128, 0.3)',
           }}
         >
-          {/* Logo/Ícone */}
-          <Box
-            sx={{
-              display: 'inline-flex',
-              p: 3,
-              borderRadius: '50%',
-              bgcolor: '#C68642',
-              mb: 3,
-              boxShadow: '0 4px 12px rgba(198,134,66,0.3)',
-            }}
-          >
-            <UtensilsCrossed size={48} color="#FFF9F2" strokeWidth={2} />
-          </Box>
+          <UtensilsCrossed
+            size={48}
+            color={theme.palette.primary.contrastText}
+            strokeWidth={2}
+          />
+        </Box>
 
-          {/* Título */}
-          <Typography
-            variant="h3"
-            sx={{
-              fontFamily: '"Caveat", cursive',
-              color: '#4E2C0A',
-              fontWeight: 700,
-              mb: 1,
-              fontSize: { xs: '2.5rem', sm: '3rem' },
-            }}
-          >
-            Maria Bonita
-          </Typography>
+        {/* Título */}
+        <Typography
+          variant="h3"
+          sx={{
+            fontFamily: '"Caveat", cursive',
+            color: 'text.primary',
+            fontWeight: 700,
+            mb: 1,
+            fontSize: { xs: '2.5rem', sm: '3rem' },
+          }}
+        >
+          Maria Bonita
+        </Typography>
 
-          <Typography
-            variant="h6"
-            sx={{
-              color: '#8B5E3C',
-              mb: 1,
-              fontWeight: 500,
-            }}
-          >
-            Bonitona das Tapiocas 🥞
-          </Typography>
+        <Typography
+          variant="h6"
+          sx={{
+            color: 'text.secondary',
+            mb: 1,
+            fontWeight: 500,
+          }}
+        >
+          Bonitona das Tapiocas
+        </Typography>
 
-          <Typography
-            variant="body1"
-            sx={{
-              color: '#A67C52',
-              mb: 5,
-              maxWidth: 350,
-              mx: 'auto',
-            }}
-          >
-            Gestão completa para sua tapiocaria com sabor e praticidade
-          </Typography>
+        <Typography
+          variant="body1"
+          sx={{
+            color: 'text.secondary',
+            mb: 5,
+            maxWidth: 350,
+            mx: 'auto',
+          }}
+        >
+          Gestão completa para sua tapiocaria com sabor e praticidade
+        </Typography>
 
-          {/* Botões */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* Botões */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Link href="/login" passHref >
+
             <Button
               variant="contained"
-              color="warning"
+              color="primary"
               size="large"
               fullWidth
-              onClick={() => router.push('/painel/login')}
               startIcon={<LogIn size={20} />}
               sx={{
-                bgcolor: '#C68642',
                 py: 1.5,
                 fontSize: '1.1rem',
                 fontWeight: 600,
-                '&:hover': {
-                  bgcolor: '#A36A2F',
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 6px 20px rgba(198,134,66,0.4)',
-                },
-                transition: 'all 0.3s ease',
               }}
             >
               Entrar no Sistema
             </Button>
 
+          </Link>
+
+          <Link href="/painel/ajuda" passHref >
+
             <Button
               variant="outlined"
-              color="warning"
+              color="primary"
               size="large"
               fullWidth
-              onClick={() => router.push('/ajuda')}
               startIcon={<HelpCircle size={20} />}
               sx={{
-                borderColor: '#C68642',
-                color: '#C68642',
                 py: 1.5,
                 fontSize: '1rem',
                 fontWeight: 600,
-                '&:hover': {
-                  borderColor: '#A36A2F',
-                  bgcolor: 'rgba(198,134,66,0.08)',
-                  transform: 'translateY(-2px)',
-                },
-                transition: 'all 0.3s ease',
               }}
             >
               Preciso de Ajuda
             </Button>
-          </Box>
 
-          {/* Rodapé */}
-          <Typography
-            variant="caption"
-            sx={{
-              display: 'block',
-              mt: 4,
-              color: '#A67C52',
-            }}
-          >
-            &copy; 2025 Maria Bonita &bull; Feito com ❤️ e massa de tapioca
-          </Typography>
-        </Paper>
-      </Container>
-    </Box>
+          </Link>
+        </Box>
+
+        {/* Rodapé */}
+        <Typography
+          variant="caption"
+          sx={{
+            display: 'block',
+            mt: 4,
+            color: 'text.secondary',
+          }}
+        >
+          &copy; 2025 Maria Bonita &bull; Feito com ❤️ e massa de tapioca
+        </Typography>
+      </Paper>
+    </Container>
   );
 }
