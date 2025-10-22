@@ -1,131 +1,186 @@
+// app/painel/dashboard/page.tsx
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { signOut } from 'firebase/auth';
-import { auth } from '@/app/lib/api/firebase/config';
-import { Box, Typography, AppBar, Toolbar, IconButton, Paper, useTheme, Container, CircularProgress } from '@mui/material';
-import { LogOut } from 'lucide-react';
+import { Box, Paper, Stack, Typography } from '@mui/material';
+import { TrendingUp, ShoppingBag, DollarSign, Users, Clock, Star } from 'lucide-react';
 import Button from '@/app/components/ui/button';
-// Importando o hook do store
-import { useUserStore } from '@/app/store/user-store';
+import MetricCard from '@/app/components/layout/dashboard/metric-card';
+import ProductItem from '@/app/components/layout/dashboard/product-item';
+import OrderCard from '@/app/components/layout/dashboard/order-card';
+import { mockMetrics, topProducts, recentOrders } from '@/app/components/layout/dashboard/data/dashboard-mock';
 
 export default function DashboardPage() {
     const router = useRouter();
-    // 1. Obtendo estado e ações do store
-    const { user, isAuthReady, logout } = useUserStore();
-
-    // 2. Lógica de Logout usando o store
-    const handleLogout = async () => {
-        try {
-            await signOut(auth);
-            // Chama a função de logout do store para limpar o estado
-            logout();
-            // Redireciona manualmente para garantir que a navegação ocorra rapidamente,
-            // embora o useEffect de um AuthProvider (próximo passo) faria isso.
-            router.push('/login');
-        } catch (error) {
-            console.error('Erro ao fazer logout:', error);
-        }
-    };
-
-    // 3. Proteção de Rota/Estado de Carregamento
-    if (!isAuthReady) {
-        // Exibe um spinner enquanto o estado de autenticação inicial está sendo carregado
-        return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-                <CircularProgress color="primary" />
-            </Box>
-        );
-    }
-
-    if (!user) {
-        // Se o usuário não estiver autenticado, redireciona para o login
-        router.replace('/login');
-        return null; // Não renderiza nada enquanto redireciona
-    }
-
-    // Nome a ser exibido (usa o displayName, ou fallback para o email, ou "Usuário")
-    const displayUserName = user.displayName || user.email || 'Usuário';
 
     return (
-        <Box
-            sx={{
-                flexGrow: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                width: '100%',
-                // Removido 'minHeight: 100vh' pois o layout já preenche a tela
-            }}
-        >
-
-
-
-            {/* Conteúdo Principal (Container) */}
-            <Container
-                maxWidth="md"
+        <Box sx={{ width: '100%' }}>
+            {/* Cards de Métricas */}
+            <Box
                 sx={{
-                    flex: 1, // Permite que o container ocupe o espaço restante verticalmente
-                    py: 4,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
+                    display: 'grid',
+                    gridTemplateColumns: {
+                        xs: '1fr',
+                        sm: 'repeat(2, 1fr)',
+                        md: 'repeat(4, 1fr)',
+                    },
+                    gap: 3,
+                    mb: 4,
                 }}
             >
-                <Paper
-                    elevation={4}
+                <MetricCard
+                    title="Vendas Hoje"
+                    value={`R$ ${mockMetrics.totalVendas.toFixed(2)}`}
+                    badge={`+${mockMetrics.crescimento}%`}
+                    icon={DollarSign}
+                    iconColor="green"
+                    bgColor="success.light"
+                    valueColor="success.main"
+                    badgeColor="success"
+                />
+
+                <MetricCard
+                    title="Pedidos Hoje"
+                    value={mockMetrics.totalPedidos}
+                    badge="+18 novo"
+                    icon={ShoppingBag}
+                    iconColor="#C68642"
+                    bgColor="primary.light"
+                    valueColor="primary.main"
+                    badgeColor="primary"
+                />
+
+                <MetricCard
+                    title="Clientes Ativos"
+                    value={mockMetrics.clientesAtivos}
+                    badge="+7 novos"
+                    icon={Users}
+                    iconColor="#0288D1"
+                    bgColor="info.light"
+                    valueColor="info.main"
+                    badgeColor="info"
+                />
+
+                <MetricCard
+                    title="Ticket Médio"
+                    value={`R$ ${mockMetrics.ticketMedio.toFixed(2)}`}
+                    badge="+R$ 3,20"
+                    icon={TrendingUp}
+                    iconColor="#C68642"
+                    bgColor="warning.light"
+                    valueColor="warning.main"
+                    badgeColor="warning"
+                />
+            </Box>
+
+            {/* Top Produtos e Pedidos Recentes */}
+            <Box
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                        xs: '1fr',
+                        md: '7fr 5fr',
+                    },
+                    gap: 3,
+                    mb: 3,
+                }}
+            >
+                {/* Top Produtos */}
+                <Paper elevation={2} sx={{ p: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                        <Star size={24} color="#C68642" />
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Top 5 Produtos Mais Vendidos
+                        </Typography>
+                    </Box>
+
+                    <Stack spacing={2.5}>
+                        {topProducts.map((product, index) => (
+                            <ProductItem
+                                key={product.id}
+                                rank={index + 1}
+                                name={product.name}
+                                sales={product.sales}
+                                revenue={product.revenue}
+                                percentage={product.percentage}
+                                trend={product.trend}
+                            />
+                        ))}
+                    </Stack>
+                </Paper>
+
+                {/* Pedidos Recentes */}
+                <Paper elevation={2} sx={{ p: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                        <Clock size={24} color="#C68642" />
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Pedidos Recentes
+                        </Typography>
+                    </Box>
+
+                    <Stack spacing={2}>
+                        {recentOrders.map((order) => (
+                            <OrderCard key={order.id} {...order} />
+                        ))}
+                    </Stack>
+
+                    <Button
+                        variant="outlined"
+                        fullWidth
+                        sx={{ mt: 2 }}
+                        onClick={() => router.push('/painel/pedidos')}
+                    >
+                        Ver Todos os Pedidos
+                    </Button>
+                </Paper>
+            </Box>
+
+            {/* Ações Rápidas */}
+            <Paper elevation={2} sx={{ p: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                    Ações Rápidas
+                </Typography>
+                <Box
                     sx={{
-                        p: { xs: 3, sm: 5 }, // Padding responsivo
-                        mt: 4,
-                        borderRadius: 3,
-                        width: '100%',
-                        maxWidth: 800,
-                        bgcolor: 'background.paper',
+                        display: 'grid',
+                        gridTemplateColumns: {
+                            xs: '1fr',
+                            sm: 'repeat(2, 1fr)',
+                            md: 'repeat(4, 1fr)',
+                        },
+                        gap: 2,
                     }}
                 >
-                    <Typography
-                        variant="h4"
-                        sx={{
-                            fontFamily: 'Caveat, cursive',
-                            color: 'primary.dark',
-                            fontWeight: 700,
-                            mb: 2,
-                        }}
+                    <Button
+                        variant="contained"
+                        fullWidth
+                        onClick={() => router.push('/painel/pedidos/novo')}
                     >
-                        Painel de Pedidos 🍽️
-                    </Typography>
-
-                    <Typography
-                        sx={{
-                            color: 'text.secondary',
-                            mb: 3,
-                        }}
+                        Novo Pedido
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        fullWidth
+                        onClick={() => router.push('/painel/cardapio')}
                     >
-                        Você está logado como **{displayUserName}**. Use este painel para gerenciar seus pedidos.
-                    </Typography>
-
-                    <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            fullWidth={true}
-                            // Exemplo de como você navegaria para uma rota de criação
-                            onClick={() => router.push('/painel/pedidos/novo')}
-                        >
-                            Novo Pedido
-                        </Button>
-
-                        <Button
-                            variant="outlined"
-                            color="primary"
-                            fullWidth={true}
-                            // Exemplo de como você navegaria para uma rota de listagem
-                            onClick={() => router.push('/painel/pedidos')}
-                        >
-                            Ver Pedidos
-                        </Button>
-                    </Box>
-                </Paper>
-            </Container>
+                        Gerenciar Cardápio
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        fullWidth
+                        onClick={() => router.push('/painel/clientes')}
+                    >
+                        Ver Clientes
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        fullWidth
+                        onClick={() => router.push('/painel/relatorios')}
+                    >
+                        Relatórios
+                    </Button>
+                </Box>
+            </Paper>
         </Box>
     );
 }

@@ -1,11 +1,10 @@
-// app/layout.tsx
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import MuiProvider from '@/app/providers/mui-provider';
 import ThemeToggle from '@/app/components/layout/theme-toggle';
 import { Box, CssBaseline } from '@mui/material';
-import AuthProvider from './providers/auth-provider';
+import AuthProvider from '@/app/providers/auth-provider';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'], display: 'swap' });
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'], display: 'swap' });
@@ -23,8 +22,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-br" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="pt-br">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning={true}
+      >
         <MuiProvider>
           <CssBaseline />
           <AuthProvider>

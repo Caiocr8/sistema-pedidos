@@ -32,27 +32,25 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
                         flexDirection: 'column',
                     }}
                 >
-                    {/* AppBar - visível apenas em mobile */}
-                    <AppBar
-                        position="fixed"
-                        sx={{
-                            width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` },
-                            ml: { sm: `${DRAWER_WIDTH}px` },
-                            zIndex: theme.zIndex.drawer + 1,
-                            display: { sm: 'none' },
-                        }}
-                    >
-                        <Toolbar>
-                            <IconButton color="inherit" edge="start" onClick={handleDrawerToggle} sx={{ mr: 2 }}>
-                                <MenuIcon size={24} />
-                            </IconButton>
-                            <Typography variant="h6" noWrap>
-                                Painel de Pedidos
-                            </Typography>
-                        </Toolbar>
-                    </AppBar>
+                    {
+                        !isDesktop && (
 
-                    {!isDesktop && <Toolbar />}
+                            <Toolbar>
+                                <IconButton
+                                    color="inherit"
+                                    aria-label="open drawer"
+                                    edge="start"
+                                    onClick={handleDrawerToggle}
+                                    sx={{ mr: 2 }}
+                                >
+                                    <MenuIcon />
+                                </IconButton>
+
+                            </Toolbar>
+
+                        )
+                    }
+
 
                     {/* Conteúdo dinâmico */}
                     <Box sx={{ p: { xs: 2, sm: 3 }, flexGrow: 1 }}>{children}</Box>
