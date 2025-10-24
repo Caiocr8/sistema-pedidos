@@ -11,7 +11,7 @@ import {
     getDocs,
     Timestamp,
     serverTimestamp,
-} from 'firebase/firestore';
+} from 'firebase/firestore/lite';
 import { db } from '@/app/lib/api/firebase/config';
 
 // Interface para os dados do usuário

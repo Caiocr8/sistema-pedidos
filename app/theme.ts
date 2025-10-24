@@ -3,15 +3,16 @@
 'use client';
 import { createTheme, type ThemeOptions } from '@mui/material/styles';
 
+
 // Tipografia compartilhada
 const baseTypography: ThemeOptions['typography'] = {
-  fontFamily: '"Segoe UI", sans-serif',
-  h1: { fontFamily: '"Caveat", cursive', fontWeight: 700 },
-  h2: { fontFamily: '"Caveat", cursive', fontWeight: 700 },
-  h3: { fontFamily: '"Caveat", cursive', fontWeight: 700 },
-  h4: { fontFamily: '"Caveat", cursive', fontWeight: 700 },
-  h5: { fontFamily: '"Caveat", cursive', fontWeight: 700 },
-  h6: { fontFamily: '"Caveat", cursive', fontWeight: 700 },
+  fontFamily: '"Roboto", sans-serif',
+  h1: { fontFamily: '"Roboto", cursive', fontWeight: 700 },
+  h2: { fontFamily: '"Roboto", cursive', fontWeight: 700 },
+  h3: { fontFamily: '"Roboto", cursive', fontWeight: 700 },
+  h4: { fontFamily: '"Roboto", cursive', fontWeight: 700 },
+  h5: { fontFamily: '"Roboto", cursive', fontWeight: 700 },
+  h6: { fontFamily: '"Roboto", cursive', fontWeight: 700 },
 };
 
 // Overrides compartilhados

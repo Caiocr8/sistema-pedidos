@@ -1,9 +1,9 @@
-// app/providers/auth-provider.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useUserStore } from '@/app/store/user-store';
-import { Box, CircularProgress } from '@mui/material';
+import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
 
 /**
  * Provider que inicializa o listener de autenticação Firebase

@@ -1,7 +1,11 @@
-// app/components/dashboard/product-item.tsx
+
 'use client';
 
-import { Box, Avatar, Typography, Chip, LinearProgress } from '@mui/material';
+import Box from '@mui/material/Box';
+import Avatar from '@mui/material/Avatar';
+import Typography from '@mui/material/Typography';
+import Chip from '@mui/material/Chip';
+import LinearProgress from '@mui/material/LinearProgress';
 
 interface ProductItemProps {
     rank: number;

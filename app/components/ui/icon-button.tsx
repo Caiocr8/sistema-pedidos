@@ -1,7 +1,7 @@
-// app/components/ui/icon-button.tsx
 'use client';
 
-import { IconButton as MuiIconButton, IconButtonProps as MuiIconButtonProps, CircularProgress } from '@mui/material';
+import MuiIconButton, { IconButtonProps as MuiIconButtonProps } from '@mui/material/IconButton';
+import CircularProgress from '@mui/material/CircularProgress';
 import { styled } from '@mui/material/styles';
 import { forwardRef } from 'react';
 

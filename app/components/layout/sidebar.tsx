@@ -1,5 +1,18 @@
 import React from 'react';
-import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, Divider, Avatar, useTheme, IconButton, Tooltip, Badge } from '@mui/material';
+import Drawer from '@mui/material/Drawer';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Divider from '@mui/material/Divider';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import Avatar from '@mui/material/Avatar';
+import IconButton from '@mui/material/IconButton';
+import Badge from '@mui/material/Badge';
+import Tooltip from '@mui/material/Tooltip';
+import { useTheme } from '@mui/material/styles';
 import { Home, User, ShoppingCart, UtensilsCrossed, LogOut, Menu as MenuIcon, Bell, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useUserStore } from '@/app/store/user-store';
@@ -11,9 +24,9 @@ const DRAWER_WIDTH = 240;
 
 // Definição dos itens de navegação
 const menuItems = [
-    { text: 'Início', icon: Home, href: '/painel/dashboard' },
+    { text: 'Início', icon: Home, href: '/painel/app/dashboard' },
     { text: 'Novo Pedido', icon: ShoppingCart, href: '/painel/novo-pedido' },
-    { text: 'Pedidos', icon: UtensilsCrossed, href: '/painel/pedidos' },
+    { text: 'Pedidos', icon: UtensilsCrossed, href: '/painel/app/pedidos' },
     { text: 'Cardápio', icon: MenuIcon, href: '/painel/cardapio' },
 ];
 

@@ -3,8 +3,7 @@
 export interface DashboardMetrics {
     totalVendas: number;
     totalPedidos: number;
-    clientesAtivos: number;
-    ticketMedio: number;
+    pedidosCancelados: number;
     crescimento: number;
 }
 
@@ -30,8 +29,7 @@ export interface RecentOrder {
 export const mockMetrics: DashboardMetrics = {
     totalVendas: 4850.50,
     totalPedidos: 127,
-    clientesAtivos: 89,
-    ticketMedio: 38.19,
+    pedidosCancelados: 7,
     crescimento: 23.5,
 };
 

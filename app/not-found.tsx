@@ -1,6 +1,11 @@
 'use client';
 
-import { Box, Container, Typography, useTheme } from '@mui/material';
+
+
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import Typography from '@mui/material/Typography';
+import { useTheme } from '@mui/material/styles';
 import { Home, HelpCircle } from 'lucide-react';
 import Button from '@/app/components/ui/button';
 import Link from 'next/link';

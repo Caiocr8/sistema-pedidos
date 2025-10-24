@@ -1,7 +1,3 @@
-@import "tailwindcss";
-
-/* styles/globals.css ou App.css */
-
 :root {
   /* Cores principais */
   --primary-brown: #6B4423;
@@ -10,28 +6,28 @@
   --light-beige: #F5E6D3;
   --medium-beige: #E8D4BA;
   --dark-beige: #D4BFA0;
-  
+
   /* Cores de status */
   --status-preparo: #D4BFA0;
   --status-pronto: #90C695;
   --status-entregue: #C87533;
-  
+
   /* Textos */
   --text-primary: #3A2415;
   --text-secondary: #6B4423;
   --text-light: #FFFFFF;
-  
+
   /* Sombras */
   --shadow-sm: 0 2px 4px rgba(107, 68, 35, 0.1);
   --shadow-md: 0 4px 8px rgba(107, 68, 35, 0.15);
   --shadow-lg: 0 8px 16px rgba(107, 68, 35, 0.2);
-  
+
   /* Bordas */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
-  
+
   /* Espaçamentos */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
@@ -47,7 +43,7 @@
 }
 
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Roboto', Tahoma, Geneva, Verdana, sans-serif;
   background-color: var(--light-beige);
   color: var(--text-primary);
 }
@@ -73,7 +69,7 @@ body {
 }
 
 .header h1 {
-  font-family: 'Brush Script MT', cursive;
+
   font-size: 3rem;
   margin: 0;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
@@ -366,6 +362,7 @@ body {
     opacity: 0;
     transform: translateY(-20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -449,11 +446,11 @@ body {
   .header h1 {
     font-size: 2rem;
   }
-  
+
   .products-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
-  
+
   .section {
     padding: var(--spacing-md);
   }
@@ -465,6 +462,7 @@ body {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

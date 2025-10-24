@@ -1,7 +1,12 @@
-// app/painel/ajuda/page.tsx
+
 'use client';
 
-import { Box, Container, Typography, Paper, Divider, useTheme } from '@mui/material';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+import Divider from '@mui/material/Divider';
+import { useTheme } from '@mui/material/styles';
 import { ArrowLeft, MessageCircle, Phone, Mail, Clock } from 'lucide-react';
 import Button from '@/app/components/ui/button';
 import IconButton from '@/app/components/ui/icon-button';

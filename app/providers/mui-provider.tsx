@@ -3,7 +3,8 @@
 'use client';
 
 import * as React from 'react';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import { lightTheme, darkTheme } from '@/app/theme'; // Ajuste o caminho se necessário
 

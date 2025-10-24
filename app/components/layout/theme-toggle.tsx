@@ -1,6 +1,10 @@
 'use client';
 
-import { IconButton, Tooltip, useTheme } from '@mui/material';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import { useTheme } from '@mui/material/styles';
+
+
 import { Moon, Sun } from 'lucide-react';
 import { useContext, useState, useEffect } from 'react';
 import { ThemeModeContext } from '@/app/providers/mui-provider';

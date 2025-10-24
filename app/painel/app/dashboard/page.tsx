@@ -1,17 +1,28 @@
-// app/painel/dashboard/page.tsx
 'use client';
 
+// Importado 'useState' para controlar os modais
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, Paper, Stack, Typography } from '@mui/material';
-import { TrendingUp, ShoppingBag, DollarSign, Users, Clock, Star } from 'lucide-react';
+import { TrendingUp, ShoppingBag, DollarSign, CircleX, Clock, Star } from 'lucide-react';
 import Button from '@/app/components/ui/button';
 import MetricCard from '@/app/components/layout/dashboard/metric-card';
 import ProductItem from '@/app/components/layout/dashboard/product-item';
 import OrderCard from '@/app/components/layout/dashboard/order-card';
 import { mockMetrics, topProducts, recentOrders } from '@/app/components/layout/dashboard/data/dashboard-mock';
 
+// Importa o modal estilizado e os novos conteúdos
+import StyledModal from '@/app/components/ui/modal';
+import VendasModalContent from './modal/vendas-modal';
+import CanceladosModalContent from './modal/cancelados-modal';
+
+
 export default function DashboardPage() {
     const router = useRouter();
+
+    // Estado para controlar qual modal está aberto
+    // 'vendas', 'cancelados', ou null (nenhum)
+    const [modalOpen, setModalOpen] = useState<'vendas' | 'cancelados' | null>(null);
 
     return (
         <Box sx={{ width: '100%' }}>
@@ -21,23 +32,26 @@ export default function DashboardPage() {
                     display: 'grid',
                     gridTemplateColumns: {
                         xs: '1fr',
-                        sm: 'repeat(2, 1fr)',
-                        md: 'repeat(4, 1fr)',
+                        sm: '1fr',
+                        md: 'repeat(3, 1fr)',
                     },
                     gap: 3,
                     mb: 4,
                 }}
             >
-                <MetricCard
-                    title="Vendas Hoje"
-                    value={`R$ ${mockMetrics.totalVendas.toFixed(2)}`}
-                    badge={`+${mockMetrics.crescimento}%`}
-                    icon={DollarSign}
-                    iconColor="green"
-                    bgColor="success.light"
-                    valueColor="success.main"
-                    badgeColor="success"
-                />
+                {/* --- CARD DE VENDAS (COM ONCLICK) --- */}
+                <Box onClick={() => setModalOpen('vendas')} sx={{ cursor: 'pointer' }}>
+                    <MetricCard
+                        title="Vendas Hoje"
+                        value={`R$ ${mockMetrics.totalVendas.toFixed(2)}`}
+                        badge={`+${mockMetrics.crescimento}%`}
+                        icon={DollarSign}
+                        iconColor="green"
+                        bgColor="success.light"
+                        valueColor="success.main"
+                        badgeColor="success"
+                    />
+                </Box>
 
                 <MetricCard
                     title="Pedidos Hoje"
@@ -50,27 +64,20 @@ export default function DashboardPage() {
                     badgeColor="primary"
                 />
 
-                <MetricCard
-                    title="Clientes Ativos"
-                    value={mockMetrics.clientesAtivos}
-                    badge="+7 novos"
-                    icon={Users}
-                    iconColor="#0288D1"
-                    bgColor="info.light"
-                    valueColor="info.main"
-                    badgeColor="info"
-                />
+                {/* --- CARD DE CANCELADOS (COM ONCLICK) --- */}
+                <Box onClick={() => setModalOpen('cancelados')} sx={{ cursor: 'pointer' }}>
+                    <MetricCard
+                        title="Pedidos Cancelados"
+                        value={mockMetrics.pedidosCancelados}
+                        badge="+4 novos"
+                        icon={CircleX}
+                        iconColor="red"
+                        bgColor="error.light"
+                        valueColor="error.dark"
+                        badgeColor="error"
+                    />
+                </Box>
 
-                <MetricCard
-                    title="Ticket Médio"
-                    value={`R$ ${mockMetrics.ticketMedio.toFixed(2)}`}
-                    badge="+R$ 3,20"
-                    icon={TrendingUp}
-                    iconColor="#C68642"
-                    bgColor="warning.light"
-                    valueColor="warning.main"
-                    badgeColor="warning"
-                />
             </Box>
 
             {/* Top Produtos e Pedidos Recentes */}
@@ -181,6 +188,27 @@ export default function DashboardPage() {
                     </Button>
                 </Box>
             </Paper>
+
+            {/* --- MODAIS RENDERIZADOS AQUI --- */}
+
+            {/* Modal de Vendas */}
+            <StyledModal
+                open={modalOpen === 'vendas'}
+                onClose={() => setModalOpen(null)}
+                title="Análise de Vendas"
+            >
+                <VendasModalContent />
+            </StyledModal>
+
+            {/* Modal de Pedidos Cancelados */}
+            <StyledModal
+                open={modalOpen === 'cancelados'}
+                onClose={() => setModalOpen(null)}
+                title="Detalhes dos Pedidos Cancelados"
+            >
+                <CanceladosModalContent />
+            </StyledModal>
+
         </Box>
     );
 }

@@ -1,7 +1,9 @@
 'use client';
 
 import React from 'react';
-import { TextField, InputAdornment } from '@mui/material';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+
 import type { TextFieldProps } from '@mui/material/TextField';
 import { styled } from '@mui/material/styles';
 

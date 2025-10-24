@@ -2,7 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Paper, Typography, InputAdornment, Grid } from '@mui/material';
+import Box from '@mui/material/Box';
+import Grid from '@mui/material/Grid';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+import InputAdornment from '@mui/material/InputAdornment';
 import { Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import Button from '@/app/components/ui/button';
 import IconButton from '@/app/components/ui/icon-button';

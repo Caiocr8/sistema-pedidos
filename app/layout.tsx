@@ -3,7 +3,8 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import MuiProvider from '@/app/providers/mui-provider';
 import ThemeToggle from '@/app/components/layout/theme-toggle';
-import { Box, CssBaseline } from '@mui/material';
+import CssBaseline from '@mui/material/CssBaseline';
+import Box from '@mui/material/Box';
 import AuthProvider from '@/app/providers/auth-provider';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'], display: 'swap' });

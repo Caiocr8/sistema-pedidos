@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Box, Typography, Paper, Container, useTheme } from '@mui/material';
+import Container from '@mui/material/Container';
+import Paper from '@mui/material/Paper';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import { useTheme } from '@mui/material/styles';
 import { LogIn, HelpCircle, UtensilsCrossed } from 'lucide-react';
 import Button from '@/app/components/ui/button';
 import Link from 'next/link';
@@ -74,7 +78,7 @@ export default function HomePage() {
         <Typography
           variant="h3"
           sx={{
-            fontFamily: '"Caveat", cursive',
+            fontFamily: '"Roboto", cursive',
             color: 'text.primary',
             fontWeight: 700,
             mb: 1,
