@@ -2,36 +2,40 @@
   "name": "sistema-pedidos",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
-    "analyze": "cross-env ANALYZE=true next build",
-    "start": "next start"
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node .output/server/index.js",
+    "analyze": "cross-env ANALYZE=true vite build",
+    "deploy": "vite build && firebase deploy"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.4",
     "@mui/material": "^7.3.4",
-    "@mui/material-nextjs": "^7.3.3",
+    "@tanstack/react-router": "^1.144.0",
     "clsx": "^2.1.1",
-    "critters": "^0.0.23",
     "firebase": "^12.4.0",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.546.0",
-    "next": "15.5.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "tailwind-merge": "^3.3.1",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "^16.0.0",
+    "@tanstack/router-plugin": "^1.145.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5.1.2",
     "cross-env": "^10.1.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^7.3.0",
+    "vite-tsconfig-paths": "^6.0.3"
   }
 }
