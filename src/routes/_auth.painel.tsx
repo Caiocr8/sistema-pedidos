@@ -1,14 +1,18 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router'
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Box, Toolbar, useTheme, useMediaQuery, IconButton } from '@mui/material';
 import { Menu as MenuIcon } from 'lucide-react';
 import Sidebar from '@/components/layout/sidebar';
+import { useCardapioStore } from '@/store/cardapioStore';
 
 export const Route = createFileRoute('/_auth/painel')({
     component: PainelLayout,
 })
 
 function PainelLayout() {
+    // Dentro do componente PainelLayout
+    const { checkDbStatusAndInit, stopListener } = useCardapioStore();
+
     const theme = useTheme();
     const isDesktop = useMediaQuery(theme.breakpoints.up('sm'));
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -17,6 +21,15 @@ function PainelLayout() {
     const handleDrawerToggle = () => {
         setMobileOpen(!mobileOpen);
     };
+
+    useEffect(() => {
+        // Chama a função de verificação ao montar o componente
+        checkDbStatusAndInit();
+
+        return () => {
+            stopListener();
+        };
+    }, [checkDbStatusAndInit, stopListener]);
 
     return (
         <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: theme.palette.background.default }}>

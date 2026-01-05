@@ -16,7 +16,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthPainelRouteImport } from './routes/_auth.painel'
 import { Route as AuthPainelPerfilRouteImport } from './routes/_auth.painel.perfil'
 import { Route as AuthPainelPedidosRouteImport } from './routes/_auth.painel.pedidos'
-import { Route as AuthPainelNovoPedidoRouteImport } from './routes/_auth.painel.novo-pedido'
 import { Route as AuthPainelDashboardRouteImport } from './routes/_auth.painel.dashboard'
 import { Route as AuthPainelCardapioRouteImport } from './routes/_auth.painel.cardapio'
 
@@ -54,11 +53,6 @@ const AuthPainelPedidosRoute = AuthPainelPedidosRouteImport.update({
   path: '/pedidos',
   getParentRoute: () => AuthPainelRoute,
 } as any)
-const AuthPainelNovoPedidoRoute = AuthPainelNovoPedidoRouteImport.update({
-  id: '/novo-pedido',
-  path: '/novo-pedido',
-  getParentRoute: () => AuthPainelRoute,
-} as any)
 const AuthPainelDashboardRoute = AuthPainelDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -77,7 +71,6 @@ export interface FileRoutesByFullPath {
   '/painel': typeof AuthPainelRouteWithChildren
   '/painel/cardapio': typeof AuthPainelCardapioRoute
   '/painel/dashboard': typeof AuthPainelDashboardRoute
-  '/painel/novo-pedido': typeof AuthPainelNovoPedidoRoute
   '/painel/pedidos': typeof AuthPainelPedidosRoute
   '/painel/perfil': typeof AuthPainelPerfilRoute
 }
@@ -88,7 +81,6 @@ export interface FileRoutesByTo {
   '/painel': typeof AuthPainelRouteWithChildren
   '/painel/cardapio': typeof AuthPainelCardapioRoute
   '/painel/dashboard': typeof AuthPainelDashboardRoute
-  '/painel/novo-pedido': typeof AuthPainelNovoPedidoRoute
   '/painel/pedidos': typeof AuthPainelPedidosRoute
   '/painel/perfil': typeof AuthPainelPerfilRoute
 }
@@ -101,7 +93,6 @@ export interface FileRoutesById {
   '/_auth/painel': typeof AuthPainelRouteWithChildren
   '/_auth/painel/cardapio': typeof AuthPainelCardapioRoute
   '/_auth/painel/dashboard': typeof AuthPainelDashboardRoute
-  '/_auth/painel/novo-pedido': typeof AuthPainelNovoPedidoRoute
   '/_auth/painel/pedidos': typeof AuthPainelPedidosRoute
   '/_auth/painel/perfil': typeof AuthPainelPerfilRoute
 }
@@ -114,7 +105,6 @@ export interface FileRouteTypes {
     | '/painel'
     | '/painel/cardapio'
     | '/painel/dashboard'
-    | '/painel/novo-pedido'
     | '/painel/pedidos'
     | '/painel/perfil'
   fileRoutesByTo: FileRoutesByTo
@@ -125,7 +115,6 @@ export interface FileRouteTypes {
     | '/painel'
     | '/painel/cardapio'
     | '/painel/dashboard'
-    | '/painel/novo-pedido'
     | '/painel/pedidos'
     | '/painel/perfil'
   id:
@@ -137,7 +126,6 @@ export interface FileRouteTypes {
     | '/_auth/painel'
     | '/_auth/painel/cardapio'
     | '/_auth/painel/dashboard'
-    | '/_auth/painel/novo-pedido'
     | '/_auth/painel/pedidos'
     | '/_auth/painel/perfil'
   fileRoutesById: FileRoutesById
@@ -200,13 +188,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthPainelPedidosRouteImport
       parentRoute: typeof AuthPainelRoute
     }
-    '/_auth/painel/novo-pedido': {
-      id: '/_auth/painel/novo-pedido'
-      path: '/novo-pedido'
-      fullPath: '/painel/novo-pedido'
-      preLoaderRoute: typeof AuthPainelNovoPedidoRouteImport
-      parentRoute: typeof AuthPainelRoute
-    }
     '/_auth/painel/dashboard': {
       id: '/_auth/painel/dashboard'
       path: '/dashboard'
@@ -227,7 +208,6 @@ declare module '@tanstack/react-router' {
 interface AuthPainelRouteChildren {
   AuthPainelCardapioRoute: typeof AuthPainelCardapioRoute
   AuthPainelDashboardRoute: typeof AuthPainelDashboardRoute
-  AuthPainelNovoPedidoRoute: typeof AuthPainelNovoPedidoRoute
   AuthPainelPedidosRoute: typeof AuthPainelPedidosRoute
   AuthPainelPerfilRoute: typeof AuthPainelPerfilRoute
 }
@@ -235,7 +215,6 @@ interface AuthPainelRouteChildren {
 const AuthPainelRouteChildren: AuthPainelRouteChildren = {
   AuthPainelCardapioRoute: AuthPainelCardapioRoute,
   AuthPainelDashboardRoute: AuthPainelDashboardRoute,
-  AuthPainelNovoPedidoRoute: AuthPainelNovoPedidoRoute,
   AuthPainelPedidosRoute: AuthPainelPedidosRoute,
   AuthPainelPerfilRoute: AuthPainelPerfilRoute,
 }

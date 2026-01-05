@@ -1,38 +1,32 @@
-// app/store/cardapioStore.ts (ou onde estiver)
+// app/store/cardapioStore.ts
 import { create } from 'zustand';
 import {
     collection,
     onSnapshot,
     query,
     orderBy,
-    // addDoc, // Não usaremos mais addDoc para esta lógica
-    setDoc, // Usaremos setDoc
+    setDoc,
     updateDoc,
     deleteDoc,
     doc,
     Firestore,
     Unsubscribe,
-    getDoc, // Usaremos getDoc para verificar existência
-    // getDocs, // Não é mais necessário para findDocIdByNumericId
-    // where, // Não é mais necessário para findDocIdByNumericId
-    // serverTimestamp
+    getDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/api/firebase/config';
 
-// Interface ajustada (docId será String(id))
 export interface CardapioItem {
-    id: number; // ID numérico interno E base para o ID do documento
+    id: number;
     nome: string;
     preco: number;
     categoria: string;
     descricao?: string;
     disponivel: boolean;
-    docId: string; // ID do documento Firestore (será String(id))
+    docId: string;
 }
 
-// Tipo para os dados que vêm do Firestore
 type FirestoreCardapioData = {
-    id?: number;
+    id?: number | string; // Aceita string também para converter depois
     nome?: string;
     preco?: number;
     categoria?: string;
@@ -41,7 +35,6 @@ type FirestoreCardapioData = {
     [key: string]: any;
 };
 
-// Interface do estado da store
 interface CardapioState {
     itens: CardapioItem[];
     loading: boolean;
@@ -51,16 +44,13 @@ interface CardapioState {
     saving: boolean;
     checkDbStatusAndInit: () => void;
     initListener: () => void;
-    detachListener: () => void;
-    // addItem agora recebe apenas os dados base, o ID numérico será calculado
-    addItem: (itemData: Omit<CardapioItem, 'id' | 'docId'>) => Promise<number | null>; // Retorna o ID numérico usado ou null
+    stopListener: () => void; // Renomeei detach para stop para padronizar
+    addItem: (itemData: Omit<CardapioItem, 'id' | 'docId'>) => Promise<number | null>;
     updateItem: (itemId: number, itemData: Partial<Omit<CardapioItem, 'id' | 'docId'>>) => Promise<void>;
     deleteItem: (itemId: number) => Promise<void>;
-    // findDocIdByNumericId não é mais necessária para update/delete
 }
 
 export const useCardapioStore = create<CardapioState>((set, get) => ({
-    // ... (itens, loading, error, dbReady, unsubscribe, saving, checkDbStatusAndInit, detachListener - permanecem iguais) ...
     itens: [],
     loading: true,
     error: null,
@@ -68,189 +58,143 @@ export const useCardapioStore = create<CardapioState>((set, get) => ({
     unsubscribe: null,
     saving: false,
 
+    // --- CORREÇÃO AQUI ---
     checkDbStatusAndInit: () => {
-        if (db && typeof db === 'object' && db.constructor.name === 'Firestore') {
+        // Verifica apenas se o DB existe e é um objeto. 
+        // Removemos 'db.constructor.name' que quebrava no deploy.
+        if (db && typeof db === 'object') {
             set({ dbReady: true, error: null });
-            console.log('Store: DB instance is valid. Initializing listener.');
+            console.log('Store: DB validado. Iniciando listener...');
             get().initListener();
         } else {
-            console.warn('Store: DB instance is not ready yet. Retrying listener init shortly.');
-            set({ dbReady: false, error: 'Aguardando conexão...', loading: true });
-            setTimeout(() => get().checkDbStatusAndInit(), 1000);
+            console.warn('Store: DB ainda não pronto. Tentando novamente...');
+            set({ dbReady: false, error: 'Conectando...', loading: true });
+            setTimeout(() => get().checkDbStatusAndInit(), 1500);
         }
     },
 
     initListener: () => {
         const { dbReady, unsubscribe } = get();
-        if (!dbReady) return;
-        if (unsubscribe) {
-            set({ loading: false }); // Já está ativo, apenas garante loading false
+
+        // Se o DB ainda não estiver pronto, chama a checagem
+        if (!dbReady) {
+            get().checkDbStatusAndInit();
             return;
         }
 
-        console.log('Store: Initializing Firestore listener for cardapio.');
+        if (unsubscribe) return; // Já está rodando
+
+        console.log('Store: Buscando dados do cardápio...');
         set({ loading: true, error: null });
 
         try {
             const cardapioCollectionRef = collection(db as Firestore, 'cardapio');
-            // Ordena pelo campo 'id' numérico para consistência
+            // Tenta usar ordem composta, se falhar por índice, usa ordem simples no catch ou ajusta aqui
             const q = query(cardapioCollectionRef, orderBy('id'));
 
             const unsubscribeFunc = onSnapshot(
                 q,
                 (querySnapshot) => {
                     const itensData: CardapioItem[] = [];
-                    querySnapshot.forEach((docSnapshot) => { // Renomeado para evitar conflito com 'doc' de firebase/firestore
+                    querySnapshot.forEach((docSnapshot) => {
                         const data = docSnapshot.data() as FirestoreCardapioData;
-                        const docId = docSnapshot.id; // ID do documento (string)
+                        const docId = docSnapshot.id;
 
-                        // Validação
-                        const numericId = typeof data.id === 'number' && data.id > 0 ? data.id : 0;
-
-                        // Verifica se o ID do documento corresponde ao ID numérico interno (como string)
-                        if (String(numericId) !== docId) {
-                            console.warn(`Store: Discrepância de ID encontrada! Doc ID: "${docId}", Campo ID: ${numericId}. Verifique o item:`, data);
-                            // Você pode decidir pular este item ou tentar usar um dos IDs
-                            // Pulando por segurança:
-                            // return;
-                        }
+                        // CORREÇÃO DE DADOS: Garante conversão se o ID vier como string "1"
+                        let numericId = 0;
+                        if (typeof data.id === 'number') numericId = data.id;
+                        else if (typeof data.id === 'string') numericId = parseInt(data.id, 10);
 
                         if (numericId > 0) {
-                            const item: CardapioItem = {
+                            itensData.push({
                                 id: numericId,
-                                docId: docId, // Armazena o ID do documento (que deve ser String(numericId))
-                                nome: typeof data.nome === 'string' && data.nome.trim() !== '' ? data.nome.trim() : 'Nome Inválido',
-                                preco: typeof data.preco === 'number' && data.preco >= 0 ? data.preco : 0,
-                                categoria: typeof data.categoria === 'string' ? data.categoria.trim() : 'Sem Categoria',
-                                descricao: typeof data.descricao === 'string' ? data.descricao.trim() : '',
-                                disponivel: typeof data.disponivel === 'boolean' ? data.disponivel : false,
-                            };
-                            itensData.push(item);
-                        } else {
-                            console.warn("Store: Item skipped due to invalid or missing numeric ID:", data, "Doc ID:", docId);
+                                docId: docId,
+                                nome: data.nome?.trim() || 'Sem Nome',
+                                preco: Number(data.preco) || 0,
+                                categoria: data.categoria?.trim() || 'Geral',
+                                descricao: data.descricao?.trim() || '',
+                                disponivel: typeof data.disponivel === 'boolean' ? data.disponivel : true,
+                            });
                         }
                     });
+
                     set({ itens: itensData, loading: false, error: null });
-                    console.log(`Store: Cardápio data updated with ${itensData.length} items.`);
                 },
                 (err) => {
-                    console.error('Store: Erro no listener do cardápio: ', err);
-                    set({ error: 'Não foi possível carregar o cardápio.', loading: false, unsubscribe: null });
+                    console.error('Store: Erro no listener:', err);
+                    // Se o erro for de índice, avisa
+                    if (err.message.includes('index')) {
+                        set({ error: 'Erro de Índice no Firebase. Verifique o console.', loading: false });
+                    } else {
+                        set({ error: 'Erro ao carregar cardápio.', loading: false });
+                    }
                 }
             );
             set({ unsubscribe: unsubscribeFunc });
         } catch (err: any) {
-            console.error("Store: Erro ao configurar o listener: ", err);
-            set({ error: 'Erro ao conectar com o cardápio.', loading: false });
+            console.error("Store: Erro fatal ao iniciar:", err);
+            set({ error: 'Falha na conexão.', loading: false });
         }
     },
 
-    detachListener: () => {
+    stopListener: () => {
         const { unsubscribe } = get();
         if (unsubscribe) {
-            console.log('Store: Detaching Firestore listener.');
             unsubscribe();
-            set({ unsubscribe: null });
+            set({ unsubscribe: null, itens: [], dbReady: false });
         }
     },
 
-    // --- MODIFICADO ---
     addItem: async (itemData) => {
-        if (!get().dbReady) throw new Error('Banco de dados não conectado.');
+        const { dbReady } = get();
+        if (!dbReady) throw new Error('Aguarde a conexão com o banco.');
+
         set({ saving: true });
         try {
             const cardapioCollectionRef = collection(db as Firestore, 'cardapio');
-
-            // --- Geração do ID Numérico (NÃO SEGURO CONTRA CONCORRÊNCIA) ---
             const currentItens = get().itens;
             const nextId = currentItens.length > 0 ? Math.max(...currentItens.map(item => item.id)) + 1 : 1;
-            console.log(`Store: Tentando usar próximo ID numérico: ${nextId}`);
-            // -----------------------------------------------------------------
 
-            const docIdString = String(nextId); // Converte para string para usar como ID do documento
+            const docIdString = String(nextId);
             const itemRef = doc(cardapioCollectionRef, docIdString);
 
-            // Verifica se um documento com este ID já existe (precaução extra)
             const docSnap = await getDoc(itemRef);
-            if (docSnap.exists()) {
-                // Isso pode acontecer se a lógica Math.max falhar devido a concorrência
-                throw new Error(`Erro: Documento com ID ${nextId} já existe. Tente novamente.`);
-            }
+            if (docSnap.exists()) throw new Error(`Erro: ID ${nextId} duplicado.`);
 
-            // Adiciona o campo 'id' numérico aos dados que serão salvos
-            const dataToSave = {
-                ...itemData,
-                id: nextId, // Garante que o campo 'id' numérico está nos dados
-                // createdAt: serverTimestamp(), // Adicionar se desejar
-                // updatedAt: serverTimestamp(),
-            };
+            const dataToSave = { ...itemData, id: nextId };
 
-            // Usa setDoc com o ID numérico convertido para string
             await setDoc(itemRef, dataToSave);
-
             set({ saving: false });
-            console.log(`Store: Item adicionado com ID numérico e Doc ID: ${nextId}`);
-            return nextId; // Retorna o ID numérico usado
-        } catch (error) {
-            console.error("Store: Erro ao adicionar item: ", error);
-            set({ saving: false, error: `Falha ao adicionar item: ${error instanceof Error ? error.message : String(error)}` });
+            return nextId;
+        } catch (error: any) {
+            set({ saving: false, error: error.message });
             throw error;
         }
     },
 
-    // --- MODIFICADO ---
     updateItem: async (itemId, itemData) => {
-        if (!get().dbReady) throw new Error('Banco de dados não conectado.');
-        if (typeof itemId !== 'number' || itemId <= 0) throw new Error("ID numérico inválido.");
+        if (!get().dbReady) throw new Error('Sem conexão.');
         set({ saving: true });
         try {
-            const docIdString = String(itemId); // Converte ID numérico para string
-            const itemRef = doc(db as Firestore, 'cardapio', docIdString);
-
-            // Verifica se o documento realmente existe antes de tentar atualizar
-            const docSnap = await getDoc(itemRef);
-            if (!docSnap.exists()) {
-                throw new Error(`Documento com ID ${itemId} não encontrado para atualização.`);
-            }
-
-            // const dataToUpdate = { ...itemData, updatedAt: serverTimestamp() };
+            const itemRef = doc(db as Firestore, 'cardapio', String(itemId));
             await updateDoc(itemRef, itemData);
             set({ saving: false });
-            console.log(`Store: Item com ID ${itemId} atualizado.`);
-        } catch (error) {
-            console.error("Store: Erro ao atualizar item: ", error);
-            set({ saving: false, error: `Falha ao atualizar item: ${error instanceof Error ? error.message : String(error)}` });
+        } catch (error: any) {
+            set({ saving: false, error: error.message });
             throw error;
         }
     },
 
-    // --- MODIFICADO ---
     deleteItem: async (itemId) => {
-        if (!get().dbReady) throw new Error('Banco de dados não conectado.');
-        if (typeof itemId !== 'number' || itemId <= 0) throw new Error("ID numérico inválido.");
+        if (!get().dbReady) throw new Error('Sem conexão.');
         set({ saving: true });
         try {
-            const docIdString = String(itemId); // Converte ID numérico para string
-            const itemRef = doc(db as Firestore, 'cardapio', docIdString);
-
-            // Opcional: Verificar se existe antes de deletar
-            // const docSnap = await getDoc(itemRef);
-            // if (!docSnap.exists()) {
-            //    console.warn(`Store: Documento com ID ${itemId} não encontrado para exclusão.`);
-            //    set({ saving: false });
-            //    return;
-            // }
-
+            const itemRef = doc(db as Firestore, 'cardapio', String(itemId));
             await deleteDoc(itemRef);
             set({ saving: false });
-            console.log(`Store: Item com ID ${itemId} deletado.`);
-        } catch (error) {
-            console.error("Store: Erro ao deletar item: ", error);
-            set({ saving: false, error: `Falha ao deletar item: ${error instanceof Error ? error.message : String(error)}` });
+        } catch (error: any) {
+            set({ saving: false, error: error.message });
             throw error;
         }
     },
 }));
-
-// Remover ou comentar a função auxiliar se não for mais usada em nenhum outro lugar
-// findDocIdByNumericId: async (numericId: number): Promise<string | null> => { ... }

@@ -12,11 +12,8 @@ import { db } from '@/lib/api/firebase/config';
 interface ItemPedido extends CardapioItem { quantidade: number; }
 const metodosPagamento = ['Pix', 'Cartão', 'Dinheiro', 'Voucher'];
 
-export const Route = createFileRoute('/_auth/painel/novo-pedido')({
-    component: NovoPedidoPage,
-})
 
-function NovoPedidoPage() {
+export default function NovoPedidoModal() {
     const router = useRouter();
     const { itens: cardapioItens, loading: loadingCardapio, error: errorCardapio, dbReady, checkDbStatusAndInit } = useCardapioStore();
 

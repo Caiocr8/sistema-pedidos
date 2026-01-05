@@ -13,7 +13,7 @@ import IconButton from '@mui/material/IconButton';
 import Badge from '@mui/material/Badge';
 import Tooltip from '@mui/material/Tooltip';
 import { useTheme } from '@mui/material/styles';
-import { Home, User, ShoppingCart, UtensilsCrossed, LogOut, Menu as MenuIcon, Bell, Settings } from 'lucide-react';
+import { Home, User, UtensilsCrossed, LogOut, Menu as MenuIcon, Bell, Settings } from 'lucide-react';
 // 1. Importação correta do TanStack Router
 import { Link, useRouter } from '@tanstack/react-router';
 import { useUserStore } from '@/store/user-store';
@@ -25,7 +25,6 @@ const DRAWER_WIDTH = 240;
 // 2. Rotas atualizadas (removido o '/app' e ajustado para a nova estrutura)
 const menuItems = [
     { text: 'Início', icon: Home, href: '/painel/dashboard' },
-    { text: 'Novo Pedido', icon: ShoppingCart, href: '/painel/novo-pedido' },
     { text: 'Pedidos', icon: UtensilsCrossed, href: '/painel/pedidos' },
     { text: 'Cardápio', icon: MenuIcon, href: '/painel/cardapio' },
 ];
@@ -138,7 +137,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }: SidebarProps
                                 }
                             }}
                         >
-                            {({ isActive }) => (
+                            {({ isActive }: { isActive: boolean }) => (
                                 <ListItemButton
                                     selected={isActive} // Usa o estado do Link para marcar como selecionado no MUI
                                     sx={{
@@ -174,7 +173,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }: SidebarProps
             <Box sx={{ px: 2, pb: 2 }}>
                 {/* Link para o Perfil atualizado */}
                 <Link to="/painel/perfil" style={{ textDecoration: 'none', color: 'inherit' }}>
-                    {({ isActive }) => (
+                    {({ isActive }: { isActive: boolean }) => (
                         <ListItemButton
                             selected={isActive}
                             sx={{
