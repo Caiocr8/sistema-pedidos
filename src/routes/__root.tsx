@@ -16,19 +16,9 @@ function RootLayout() {
     return (
         <MuiProvider>
             <AuthProvider>
-                <Box
-                    component="main"
-                    sx={{
-                        minHeight: '100vh',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        px: 2,
-                    }}
-                >
+                <Box component="main" sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
                     <Outlet />
                 </Box>
-
                 <ThemeToggle />
             </AuthProvider>
         </MuiProvider>

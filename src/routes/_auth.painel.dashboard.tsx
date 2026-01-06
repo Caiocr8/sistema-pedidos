@@ -16,8 +16,8 @@ import { mockMetrics, topProducts } from '@/components/layout/dashboard/data/das
 
 // Modais (Ajuste o caminho se necessário)
 import StyledModal from '@/components/ui/modal';
-import VendasModalContent from '@/components/dashboard/modal/vendas-modal';
-import CanceladosModalContent from '@/components/dashboard/modal/cancelados-modal';
+import VendasModalContent from '@/components/layout/dashboard/modal/vendas-modal';
+import CanceladosModalContent from '@/components/layout/dashboard/modal/cancelados-modal';
 
 interface FirebaseOrderData {
     clienteNome: string;
@@ -125,7 +125,6 @@ function DashboardPage() {
             <Paper elevation={2} sx={{ p: 3 }}>
                 <Typography variant="h6" fontWeight={600} mb={2}>Ações Rápidas</Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
-                    <Button variant="contained" fullWidth onClick={() => router.navigate({ to: '/painel/novo-pedido' })}>Novo Pedido</Button>
                     <Button variant="outlined" fullWidth onClick={() => router.navigate({ to: '/painel/cardapio' })}>Cardápio</Button>
                     <Button variant="outlined" fullWidth disabled>Clientes</Button>
                     <Button variant="outlined" fullWidth disabled>Relatórios</Button>
