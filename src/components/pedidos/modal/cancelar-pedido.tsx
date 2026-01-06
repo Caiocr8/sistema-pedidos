@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Box, Typography, Button, TextField, Alert } from '@mui/material';
+import { Box, Typography, TextField } from '@mui/material';
 import { AlertTriangle } from 'lucide-react';
+// Importando seu botão personalizado
+import StyledButton from '@/components/ui/button';
 
 interface CancelarModalProps {
     titulo?: string;
@@ -53,17 +55,25 @@ export default function CancelarModal({
             />
 
             <Box display="flex" gap={2} mt={4} justifyContent="flex-end">
-                <Button onClick={onCancel} variant="outlined" color="inherit" disabled={loading}>
+                {/* Botão Voltar usando seu componente */}
+                <StyledButton
+                    onClick={onCancel}
+                    variant="outlined"
+                    color="inherit"
+                    disabled={loading}
+                >
                     Voltar
-                </Button>
-                <Button
+                </StyledButton>
+
+                {/* Botão Confirmar usando seu componente com prop loading */}
+                <StyledButton
                     onClick={handleConfirm}
                     variant="contained"
                     color="error"
-                    disabled={loading}
+                    loading={loading}
                 >
-                    {loading ? 'Processando...' : 'Confirmar'}
-                </Button>
+                    Confirmar
+                </StyledButton>
             </Box>
         </Box>
     );

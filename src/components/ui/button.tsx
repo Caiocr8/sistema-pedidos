@@ -112,4 +112,4 @@ const Button: React.FC<CustomButtonProps> = ({
   );
 };
 
-export default Button;
+export default StyledButton;
