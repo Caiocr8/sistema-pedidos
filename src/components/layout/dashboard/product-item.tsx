@@ -1,4 +1,3 @@
-
 'use client';
 
 import Box from '@mui/material/Box';
@@ -8,12 +7,13 @@ import Chip from '@mui/material/Chip';
 import LinearProgress from '@mui/material/LinearProgress';
 
 interface ProductItemProps {
+    id?: number; // Adicionado pois é passado no map
     rank: number;
     name: string;
-    sales: number;
-    revenue: number;
-    percentage: number;
-    trend: string;
+    sales: string | number; // Agora aceita texto formatado ("10 vendas")
+    revenue: string | number; // Agora aceita texto formatado ("R$ 500,00")
+    percentage?: number; // Opcional
+    trend?: string; // Opcional
 }
 
 export default function ProductItem({
@@ -26,7 +26,7 @@ export default function ProductItem({
 }: ProductItemProps) {
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: percentage ? 1 : 0 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
                     <Avatar
                         sx={{
@@ -44,24 +44,32 @@ export default function ProductItem({
                             {name}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                            {sales} vendas • R$ {revenue.toFixed(2)}
+                            {sales} • {revenue}
                         </Typography>
                     </Box>
                 </Box>
-                <Chip label={trend} size="small" color="success" sx={{ fontWeight: 600 }} />
+
+                {/* Só renderiza se tiver tendência */}
+                {trend && (
+                    <Chip label={trend} size="small" color="success" sx={{ fontWeight: 600 }} />
+                )}
             </Box>
-            <LinearProgress
-                variant="determinate"
-                value={percentage}
-                sx={{
-                    height: 6,
-                    borderRadius: 1,
-                    bgcolor: 'action.hover',
-                    '& .MuiLinearProgress-bar': {
+
+            {/* Só renderiza a barra se tiver porcentagem */}
+            {percentage !== undefined && (
+                <LinearProgress
+                    variant="determinate"
+                    value={percentage}
+                    sx={{
+                        height: 6,
                         borderRadius: 1,
-                    },
-                }}
-            />
+                        bgcolor: 'action.hover',
+                        '& .MuiLinearProgress-bar': {
+                            borderRadius: 1,
+                        },
+                    }}
+                />
+            )}
         </Box>
     );
 }
