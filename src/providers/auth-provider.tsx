@@ -1,46 +1,38 @@
-'use client';
-
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/lib/api/firebase/config';
 import { useUserStore } from '@/store/user-store';
-import Box from '@mui/material/Box';
-import CircularProgress from '@mui/material/CircularProgress';
+import { UserData } from '@/lib/api/firebase/user'; // Importe a interface
 
-/**
- * Provider que inicializa o listener de autenticação Firebase
- * Exibe loading até confirmar autenticação inicial.
- */
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-    const { initializeAuth, isAuthReady } = useUserStore();
-    const [mounted, setMounted] = useState(false);
+    const { setUser, setLoading } = useUserStore();
 
     useEffect(() => {
-        setMounted(true);
-        const unsubscribe = initializeAuth();
-        return () => {
-            if (typeof unsubscribe === 'function') unsubscribe();
-        };
-    }, [initializeAuth]);
+        setLoading(true);
 
-    const renderLoading = () => (
-        <Box
-            sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                width: '100vw',
-                height: '100vh',
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                bgcolor: 'background.default',
-                zIndex: 1200,
-            }}
-        >
-            <CircularProgress color="primary" size={48} />
-        </Box>
-    );
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Montamos um objeto que satisfaça a interface UserData
+                // (Campos opcionais ficam undefined se não existirem no user do Auth)
+                const userData: UserData = {
+                    uid: user.uid,
+                    email: user.email || '',
+                    displayName: user.displayName || undefined,
+                    photoURL: user.photoURL || undefined,
+                    // Outros campos obrigatórios podem precisar de valor padrão se não vierem do Firestore aqui
+                    // Se você usar o initializeAuth da store, isso já é tratado lá.
+                    // Mas para o AuthProvider simples, isso resolve o login imediato:
+                } as UserData;
 
-    if (!mounted || !isAuthReady) return renderLoading();
+                setUser(userData);
+            } else {
+                setUser(null);
+            }
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [setUser, setLoading]);
 
     return <>{children}</>;
 }

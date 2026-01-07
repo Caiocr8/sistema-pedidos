@@ -2,12 +2,12 @@ import { createFileRoute } from '@tanstack/react-router';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     Typography, Box, Paper, Chip, IconButton, Tooltip,
-    FormControl, CircularProgress, Alert, Stack, Avatar,
+    FormControl, CircularProgress, Stack, Avatar,
     Divider, useTheme, Select, MenuItem, InputLabel, TextField
 } from '@mui/material';
 import {
     Clock, DollarSign, CheckCircle, RefreshCw, XCircle, Plus,
-    Timer as TimerIcon, Receipt, Trash2, CreditCard, ChevronRight, X, Ban
+    Timer as TimerIcon, Trash2, CreditCard, ChevronRight, X, Ban
 } from 'lucide-react';
 import { collection, onSnapshot, query, orderBy, doc, updateDoc, Firestore } from 'firebase/firestore';
 import { db } from '@/lib/api/firebase/config';
@@ -182,7 +182,7 @@ const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void 
                     {pedido.itens.map((item: any, i: number) => (
                         <Box key={i} sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'background.paper', '&:hover': { bgcolor: 'action.hover' } }}>
                             <Box display="flex" gap={2} alignItems="center">
-                                <Avatar sx={{ width: 36, height: 36, fontSize: '0.9rem', bgcolor: 'grey.200', color: 'text.primary', fontWeight: 'bold' }}>{item.quantidade}</Avatar>
+                                <Avatar sx={{ width: 56, height: 56, fontSize: '0.9rem', bgcolor: 'white', color: 'primary.main', fontWeight: 'bold' }}>{item.quantidade}</Avatar>
                                 <Box>
                                     <Typography variant="body1" fontWeight={600}>{item.nome}</Typography>
                                     <Typography variant="caption" color="text.secondary">Unit: R$ {item.precoUnitario.toFixed(2)}</Typography>

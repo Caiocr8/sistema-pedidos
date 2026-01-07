@@ -1,32 +1,26 @@
-import { createFileRoute, redirect, Outlet } from '@tanstack/react-router'
-import { useUserStore } from '@/store/user-store'
-import Box from '@mui/material/Box'
-import CircularProgress from '@mui/material/CircularProgress'
+import { createFileRoute, Outlet, useRouter } from '@tanstack/react-router';
+import { useUserStore } from '@/store/user-store';
+import { Box, CircularProgress } from '@mui/material';
+import { useEffect } from 'react';
 
 export const Route = createFileRoute('/_auth')({
-    // 1. Proteção Lógica (Executa antes de renderizar)
-    beforeLoad: ({ location }) => {
-        const { isAuthReady, user } = useUserStore.getState()
-
-        // Se o Firebase já carregou e não tem usuário, redireciona para login
-        if (isAuthReady && !user) {
-            throw redirect({
-                to: '/login',
-                search: {
-                    // Salva onde o usuário tentou ir para redirecionar de volta depois
-                    redirect: location.href,
-                },
-            })
-        }
-    },
     component: AuthLayout,
-})
+});
 
 function AuthLayout() {
-    const { isAuthReady, user } = useUserStore()
+    // CORREÇÃO AQUI: mudou de 'loading' para 'isLoading'
+    const { user, isLoading } = useUserStore();
+    const router = useRouter();
 
-    // 2. Feedback Visual (Enquanto o Firebase inicializa)
-    if (!isAuthReady) {
+    useEffect(() => {
+        // Se terminou de carregar e não tem usuário, manda pro login
+        if (!isLoading && !user) {
+            router.navigate({ to: '/login', replace: true });
+        }
+    }, [user, isLoading, router]);
+
+    // Enquanto carrega (estado inicial do Firebase), mostra spinner
+    if (isLoading) {
         return (
             <Box
                 sx={{
@@ -34,18 +28,18 @@ function AuthLayout() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     height: '100vh',
-                    width: '100%',
-                    bgcolor: 'background.default' // Usa a cor do tema
+                    width: '100vw',
+                    bgcolor: 'background.default'
                 }}
             >
-                <CircularProgress color="primary" size={48} />
+                <CircularProgress />
             </Box>
-        )
+        );
     }
 
-    // Se passou pelo beforeLoad mas por algum motivo o user ainda é null (raro), não renderiza nada
-    if (!user) return null
+    // Se não tem usuário, retorna null para não renderizar o Outlet (o useEffect vai redirecionar)
+    if (!user) return null;
 
-    // Renderiza as rotas filhas (Painel, Dashboard, etc)
-    return <Outlet />
-} 
+    // Se tem usuário, renderiza o painel
+    return <Outlet />;
+}

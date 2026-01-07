@@ -1,4 +1,4 @@
-// app/store/user-store.ts
+// src/store/user-store.ts
 'use client';
 
 import { create } from 'zustand';
@@ -15,19 +15,28 @@ interface UserState {
 }
 
 interface UserActions {
+    // Ações existentes
     login: (userData: UserData) => void;
     logout: () => Promise<void>;
     updateUser: (userData: Partial<UserData>) => void;
     initializeAuth: () => () => void;
+
+    // NOVAS AÇÕES (Necessárias para o AuthProvider)
+    setUser: (user: UserData | null) => void;
+    setLoading: (isLoading: boolean) => void;
 }
 
 export const useUserStore = create<UserState & UserActions>()(
     persist(
         (set, get) => ({
             user: null,
-            isLoading: false,
+            isLoading: true, // Começa carregando
             isAuthReady: false,
             error: null,
+
+            // Implementação das novas ações
+            setUser: (user) => set({ user }),
+            setLoading: (isLoading) => set({ isLoading }),
 
             login: (userData) => {
                 set({ user: userData, isLoading: false, isAuthReady: true, error: null });
@@ -49,6 +58,8 @@ export const useUserStore = create<UserState & UserActions>()(
             },
 
             initializeAuth: () => {
+                // Esta função pode ser mantida para uso interno ou redundância,
+                // mas o AuthProvider agora controla o estado principal.
                 set({ isLoading: true, isAuthReady: false });
 
                 const unsubscribe = onAuthStateChanged(
@@ -71,16 +82,17 @@ export const useUserStore = create<UserState & UserActions>()(
                                 set({ user: userData, isLoading: false, isAuthReady: true, error: null });
                             } catch (error) {
                                 console.error('Erro ao buscar dados do usuário:', error);
+                                // Em caso de erro no Firestore, define o básico do Auth
                                 set({
                                     user: {
                                         uid: firebaseUser.uid,
                                         email: firebaseUser.email || '',
                                         displayName: firebaseUser.displayName || undefined,
                                         photoURL: firebaseUser.photoURL || undefined,
-                                    },
+                                    } as UserData,
                                     isLoading: false,
                                     isAuthReady: true,
-                                    error: 'Não foi possível carregar dados completos do usuário.',
+                                    error: 'Não foi possível carregar dados completos.',
                                 });
                             }
                         } else {
