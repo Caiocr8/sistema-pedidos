@@ -16,6 +16,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthPainelRouteImport } from './routes/_auth.painel'
 import { Route as AuthPainelPerfilRouteImport } from './routes/_auth.painel.perfil'
 import { Route as AuthPainelPedidosRouteImport } from './routes/_auth.painel.pedidos'
+import { Route as AuthPainelFuncionariosRouteImport } from './routes/_auth.painel.funcionarios'
 import { Route as AuthPainelDashboardRouteImport } from './routes/_auth.painel.dashboard'
 import { Route as AuthPainelCardapioRouteImport } from './routes/_auth.painel.cardapio'
 
@@ -53,6 +54,11 @@ const AuthPainelPedidosRoute = AuthPainelPedidosRouteImport.update({
   path: '/pedidos',
   getParentRoute: () => AuthPainelRoute,
 } as any)
+const AuthPainelFuncionariosRoute = AuthPainelFuncionariosRouteImport.update({
+  id: '/funcionarios',
+  path: '/funcionarios',
+  getParentRoute: () => AuthPainelRoute,
+} as any)
 const AuthPainelDashboardRoute = AuthPainelDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/painel': typeof AuthPainelRouteWithChildren
   '/painel/cardapio': typeof AuthPainelCardapioRoute
   '/painel/dashboard': typeof AuthPainelDashboardRoute
+  '/painel/funcionarios': typeof AuthPainelFuncionariosRoute
   '/painel/pedidos': typeof AuthPainelPedidosRoute
   '/painel/perfil': typeof AuthPainelPerfilRoute
 }
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/painel': typeof AuthPainelRouteWithChildren
   '/painel/cardapio': typeof AuthPainelCardapioRoute
   '/painel/dashboard': typeof AuthPainelDashboardRoute
+  '/painel/funcionarios': typeof AuthPainelFuncionariosRoute
   '/painel/pedidos': typeof AuthPainelPedidosRoute
   '/painel/perfil': typeof AuthPainelPerfilRoute
 }
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/_auth/painel': typeof AuthPainelRouteWithChildren
   '/_auth/painel/cardapio': typeof AuthPainelCardapioRoute
   '/_auth/painel/dashboard': typeof AuthPainelDashboardRoute
+  '/_auth/painel/funcionarios': typeof AuthPainelFuncionariosRoute
   '/_auth/painel/pedidos': typeof AuthPainelPedidosRoute
   '/_auth/painel/perfil': typeof AuthPainelPerfilRoute
 }
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/painel/cardapio'
     | '/painel/dashboard'
+    | '/painel/funcionarios'
     | '/painel/pedidos'
     | '/painel/perfil'
   fileRoutesByTo: FileRoutesByTo
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/painel/cardapio'
     | '/painel/dashboard'
+    | '/painel/funcionarios'
     | '/painel/pedidos'
     | '/painel/perfil'
   id:
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '/_auth/painel'
     | '/_auth/painel/cardapio'
     | '/_auth/painel/dashboard'
+    | '/_auth/painel/funcionarios'
     | '/_auth/painel/pedidos'
     | '/_auth/painel/perfil'
   fileRoutesById: FileRoutesById
@@ -188,6 +200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthPainelPedidosRouteImport
       parentRoute: typeof AuthPainelRoute
     }
+    '/_auth/painel/funcionarios': {
+      id: '/_auth/painel/funcionarios'
+      path: '/funcionarios'
+      fullPath: '/painel/funcionarios'
+      preLoaderRoute: typeof AuthPainelFuncionariosRouteImport
+      parentRoute: typeof AuthPainelRoute
+    }
     '/_auth/painel/dashboard': {
       id: '/_auth/painel/dashboard'
       path: '/dashboard'
@@ -208,6 +227,7 @@ declare module '@tanstack/react-router' {
 interface AuthPainelRouteChildren {
   AuthPainelCardapioRoute: typeof AuthPainelCardapioRoute
   AuthPainelDashboardRoute: typeof AuthPainelDashboardRoute
+  AuthPainelFuncionariosRoute: typeof AuthPainelFuncionariosRoute
   AuthPainelPedidosRoute: typeof AuthPainelPedidosRoute
   AuthPainelPerfilRoute: typeof AuthPainelPerfilRoute
 }
@@ -215,6 +235,7 @@ interface AuthPainelRouteChildren {
 const AuthPainelRouteChildren: AuthPainelRouteChildren = {
   AuthPainelCardapioRoute: AuthPainelCardapioRoute,
   AuthPainelDashboardRoute: AuthPainelDashboardRoute,
+  AuthPainelFuncionariosRoute: AuthPainelFuncionariosRoute,
   AuthPainelPedidosRoute: AuthPainelPedidosRoute,
   AuthPainelPerfilRoute: AuthPainelPerfilRoute,
 }

@@ -5,7 +5,7 @@ import { ShoppingBag, DollarSign, CircleX, Clock, Star, TrendingUp, TrendingDown
 
 // Firebase
 import { db } from '@/lib/api/firebase/config';
-import { collection, query, orderBy, limit, onSnapshot, where, Timestamp, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, Timestamp, getDocs } from 'firebase/firestore';
 
 // Componentes
 import Button from '@/components/ui/button';
@@ -77,7 +77,6 @@ function DashboardPage() {
 
         // 1. Monitorar Pedidos Ativos (Longa Duração)
         const unsubActive = onSnapshot(qActive, (snap) => {
-            const now = new Date();
             const longOrders = snap.docs
                 .map(d => ({ id: d.id, ...d.data() } as OrderData))
                 .filter(order => {
@@ -132,11 +131,10 @@ function DashboardPage() {
                 setTopProducts(productsArray.sort((a, b) => b.qtdHoje - a.qtdHoje).slice(0, 5));
 
                 // Atualizar Métricas Gerais
-                // Pedidos Hoje = Finalizados Hoje + Ativos (snapshot separado mas ok somar aqui para visualização) + Cancelados
                 setMetrics(prev => ({
                     ...prev,
                     vendasHoje: totalVendas,
-                    pedidosHoje: snapHoje.size // Apenas finalizados conta como "venda realizada" para KPI financeiro, ou some com ativos se preferir volume operacional
+                    pedidosHoje: snapHoje.size // Consideramos pedidos finalizados como a métrica principal de volume
                 }));
                 setLoading(false);
             });
@@ -150,7 +148,7 @@ function DashboardPage() {
         };
     }, []);
 
-    // Atualiza o contador de "Pedidos Hoje" somando tudo
+    // Atualiza o contador de "Volume Total" somando tudo
     const totalPedidosDia = metrics.pedidosHoje + longRunningOrders.length + metrics.canceladosHoje; // Aproximação
 
     return (

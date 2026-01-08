@@ -1,29 +1,16 @@
-import React from 'react';
-import Drawer from '@mui/material/Drawer';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import Divider from '@mui/material/Divider';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemIcon from '@mui/material/ListItemIcon';
-import ListItemText from '@mui/material/ListItemText';
-import Avatar from '@mui/material/Avatar';
-import IconButton from '@mui/material/IconButton';
-import Badge from '@mui/material/Badge';
-import Tooltip from '@mui/material/Tooltip';
-import { useTheme } from '@mui/material/styles';
-import { Home, User, UtensilsCrossed, LogOut, Menu as MenuIcon, Bell, Settings } from 'lucide-react';
-// 1. Importação correta do TanStack Router
+import React, { useMemo } from 'react';
+import {
+    Drawer, Box, Typography, Divider, List, ListItem, ListItemButton,
+    ListItemIcon, ListItemText, Avatar, IconButton, Badge, Tooltip, useTheme, alpha
+} from '@mui/material';
+import { Home, User, UtensilsCrossed, LogOut, Menu as MenuIcon, Bell, Settings, Users } from 'lucide-react';
 import { Link, useRouter } from '@tanstack/react-router';
 import { useUserStore } from '@/store/user-store';
 import { auth } from '@/lib/api/firebase/config';
 import { signOut } from 'firebase/auth';
 
-const DRAWER_WIDTH = 240;
-
-// 2. Rotas atualizadas (removido o '/app' e ajustado para a nova estrutura)
-const menuItems = [
+// Itens base visíveis para todos os usuários
+const BASE_MENU_ITEMS = [
     { text: 'Início', icon: Home, href: '/painel/dashboard' },
     { text: 'Pedidos', icon: UtensilsCrossed, href: '/painel/pedidos' },
     { text: 'Cardápio', icon: MenuIcon, href: '/painel/cardapio' },
@@ -31,135 +18,133 @@ const menuItems = [
 
 interface SidebarProps {
     mobileOpen: boolean;
-    handleDrawerToggle: () => void;
+    onClose: () => void;
+    width?: number;
 }
 
-export default function Sidebar({ mobileOpen, handleDrawerToggle }: SidebarProps) {
+export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarProps) {
     const theme = useTheme();
-    const router = useRouter(); // Hook para navegação imperativa se necessário
-    const userStore = useUserStore();
+    const router = useRouter();
+    const { user, logout } = useUserStore();
 
-    const user = useUserStore((state) => state.user);
-    const userName = user?.displayName || 'Usuário';
-    const userEmail = user?.email || 'Sem e-mail';
-    const userInitial = userName[0] || 'U';
+    // 1. Constrói o menu baseado no cargo (role) do usuário
+    const menuItems = useMemo(() => {
+        const items = [...BASE_MENU_ITEMS];
+        // Adiciona gestão de equipe apenas para admins
+        if (user?.role === 'admin') {
+            items.push({ text: 'Equipe', icon: Users, href: '/painel/funcionarios' });
+        }
+        return items;
+    }, [user]);
 
+    // Dados do usuário para exibição no cabeçalho
+    const userData = useMemo(() => ({
+        name: user?.displayName || 'Usuário',
+        email: user?.email || 'Sem e-mail',
+        initial: (user?.displayName?.[0] || 'U').toUpperCase()
+    }), [user]);
+
+    // Função de Logout
     const handleLogout = async () => {
         try {
             await signOut(auth);
-            userStore.logout(); // Limpa a store
-            // Redireciona para login após sair
+            logout();
             router.navigate({ to: '/login' });
         } catch (error) {
-            console.error("Erro ao fazer logout:", error);
+            console.error("Erro ao sair:", error);
         }
     };
 
-    const drawerContent = (
-        <Box
-            sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                backgroundColor: theme.palette.background.default,
-            }}
-        >
-            <Box sx={{ p: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="h6" fontWeight={700} color="primary.main" sx={{ fontFamily: 'Caveat, cursive', fontSize: '1.5rem' }}>
+    // 2. Gerador de Estilos Padronizados (Design System)
+    // Garante que todos os botões (menu e perfil) tenham o mesmo visual "profissional"
+    const getListItemStyles = (isActive: boolean, isError = false) => {
+        const activeColor = isError ? theme.palette.error.main : theme.palette.primary.main;
+        const activeBg = isError ? alpha(theme.palette.error.main, 0.1) : alpha(theme.palette.primary.main, 0.1);
+        const hoverBg = isError ? alpha(theme.palette.error.main, 0.15) : alpha(theme.palette.primary.main, 0.15);
+
+        return {
+            borderRadius: 2,
+            mb: 1,
+            py: 1.5,
+            color: isActive ? activeColor : theme.palette.text.primary,
+            bgcolor: isActive ? activeBg : 'transparent',
+            transition: 'all 0.2s ease-in-out',
+            // Estilo quando selecionado (MUI)
+            '&.Mui-selected': {
+                bgcolor: activeBg,
+                color: activeColor,
+                '&:hover': { bgcolor: hoverBg },
+                '& .MuiListItemIcon-root': { color: activeColor },
+            },
+            // Estilo de Hover
+            '&:hover': {
+                bgcolor: isActive ? hoverBg : theme.palette.action.hover,
+                transform: 'translateX(4px)', // Efeito sutil de movimento
+            },
+            // Ícone
+            '& .MuiListItemIcon-root': {
+                minWidth: 40,
+                color: isActive ? activeColor : theme.palette.text.secondary,
+                transition: 'color 0.2s',
+            }
+        };
+    };
+
+    // Conteúdo interno do Drawer (extraído para evitar duplicação)
+    const DrawerContent = (
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+            {/* Cabeçalho / Perfil */}
+            <Box sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+                    <Typography variant="h5" sx={{ fontFamily: 'Caveat, cursive', fontWeight: 700, color: 'primary.main' }}>
                         Maria Bonita
                     </Typography>
+                    {/* Ações Rápidas (Notificação/Config) */}
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                         <Tooltip title="Notificações">
-                            <IconButton size="small">
-                                <Badge badgeContent={3} color="error">
-                                    <Bell size={18} />
-                                </Badge>
+                            <IconButton size="small" sx={{ color: 'text.secondary' }}>
+                                <Badge badgeContent={3} color="error" variant="dot"><Bell size={18} /></Badge>
                             </IconButton>
                         </Tooltip>
                         <Tooltip title="Configurações">
-                            <IconButton size="small">
+                            <IconButton size="small" sx={{ color: 'text.secondary' }}>
                                 <Settings size={18} />
                             </IconButton>
                         </Tooltip>
                     </Box>
                 </Box>
 
-                <Box
-                    sx={{
-                        p: 2,
-                        borderRadius: 2,
-                        bgcolor: theme.palette.mode === 'light'
-                            ? 'rgba(198, 134, 66, 0.08)'
-                            : 'rgba(230, 185, 128, 0.08)',
-                        border: 1,
-                        borderColor: 'divider'
-                    }}
-                >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Avatar
-                            sx={{
-                                width: 40,
-                                height: 40,
-                                bgcolor: 'primary.main',
-                                fontWeight: 700,
-                                fontSize: '1.1rem'
-                            }}
-                        >
-                            {userInitial}
+                {/* Card do Usuário */}
+                <Box sx={{ p: 2, borderRadius: 3, bgcolor: alpha(theme.palette.primary.main, 0.08), border: '1px solid', borderColor: alpha(theme.palette.primary.main, 0.1) }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar sx={{ width: 42, height: 42, bgcolor: 'primary.main', fontWeight: 700, fontSize: '1.1rem', boxShadow: 2 }}>
+                            {userData.initial}
                         </Avatar>
                         <Box sx={{ overflow: 'hidden', flex: 1 }}>
-                            <Typography variant="subtitle2" fontWeight={600} noWrap>
-                                Olá, {userName}! 👋
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" noWrap>
-                                {userEmail}
-                            </Typography>
+                            <Typography variant="subtitle2" fontWeight={700} noWrap>Olá, {userData.name.split(' ')[0]}!</Typography>
+                            <Typography variant="caption" color="text.secondary" noWrap display="block">{userData.email}</Typography>
                         </Box>
                     </Box>
                 </Box>
             </Box>
 
-            <Divider />
+            <Divider sx={{ borderStyle: 'dashed' }} />
 
-            <List sx={{ flexGrow: 1, px: 2, py: 1 }}>
+            {/* Menu Principal */}
+            <List sx={{ flexGrow: 1, px: 2, py: 2 }}>
                 {menuItems.map((item) => (
-                    <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
-                        {/* 3. Componente Link do TanStack Router */}
-                        <Link
-                            to={item.href}
-                            style={{ width: '100%', textDecoration: 'none', color: 'inherit' }}
-                            // activeProps permite estilizar o link quando ele é a rota atual
-                            activeProps={{
-                                style: {
-                                    fontWeight: 'bold',
-                                    color: theme.palette.primary.main,
-                                }
-                            }}
-                        >
-                            {({ isActive }: { isActive: boolean }) => (
+                    <ListItem key={item.href} disablePadding>
+                        <Link to={item.href} style={{ width: '100%', textDecoration: 'none' }}>
+                            {({ isActive }) => (
                                 <ListItemButton
-                                    selected={isActive} // Usa o estado do Link para marcar como selecionado no MUI
-                                    sx={{
-                                        borderRadius: 2,
-                                        '&.Mui-selected': {
-                                            bgcolor: theme.palette.primary.main + '1A', // 10% de opacidade
-                                            color: theme.palette.primary.main,
-                                            '&:hover': {
-                                                bgcolor: theme.palette.primary.main + '26',
-                                            }
-                                        },
-                                        '&:hover': {
-                                            bgcolor: theme.palette.action.hover,
-                                        }
-                                    }}
+                                    selected={isActive}
+                                    onClick={onClose} // Fecha menu mobile ao navegar
+                                    sx={getListItemStyles(isActive)}
                                 >
-                                    <ListItemIcon sx={{ minWidth: 40, color: isActive ? 'inherit' : undefined }}>
-                                        <item.icon size={20} />
-                                    </ListItemIcon>
+                                    <ListItemIcon><item.icon size={22} /></ListItemIcon>
                                     <ListItemText
                                         primary={item.text}
-                                        primaryTypographyProps={{ fontWeight: isActive ? 700 : 500 }}
+                                        primaryTypographyProps={{ fontWeight: isActive ? 700 : 500, fontSize: '0.95rem' }}
                                     />
                                 </ListItemButton>
                             )}
@@ -168,36 +153,19 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }: SidebarProps
                 ))}
             </List>
 
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ borderStyle: 'dashed' }} />
 
-            <Box sx={{ px: 2, pb: 2 }}>
-                {/* Link para o Perfil atualizado */}
-                <Link to="/painel/perfil" style={{ textDecoration: 'none', color: 'inherit' }}>
-                    {({ isActive }: { isActive: boolean }) => (
+            {/* Rodapé (Perfil e Sair) */}
+            <Box sx={{ p: 2 }}>
+                <Link to="/painel/perfil" style={{ textDecoration: 'none' }}>
+                    {({ isActive }) => (
                         <ListItemButton
                             selected={isActive}
-                            sx={{
-                                borderRadius: 2,
-                                mb: 1,
-                                border: 1,
-                                borderColor: 'divider',
-                                '&.Mui-selected': {
-                                    bgcolor: theme.palette.primary.main + '1A',
-                                    borderColor: 'primary.main',
-                                    color: 'primary.main'
-                                },
-                                '&:hover': {
-                                    bgcolor: theme.palette.action.hover,
-                                }
-                            }}
+                            onClick={onClose}
+                            sx={getListItemStyles(isActive)}
                         >
-                            <ListItemIcon sx={{ minWidth: 40, color: isActive ? 'inherit' : undefined }}>
-                                <User size={20} />
-                            </ListItemIcon>
-                            <ListItemText
-                                primary="Meu Perfil"
-                                primaryTypographyProps={{ fontWeight: 500 }}
-                            />
+                            <ListItemIcon><User size={20} /></ListItemIcon>
+                            <ListItemText primary="Meu Perfil" primaryTypographyProps={{ fontWeight: isActive ? 700 : 500, fontSize: '0.9rem' }} />
                         </ListItemButton>
                     )}
                 </Link>
@@ -205,24 +173,13 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }: SidebarProps
                 <ListItemButton
                     onClick={handleLogout}
                     sx={{
-                        borderRadius: 2,
-                        border: 1,
-                        borderColor: 'error.main',
-                        '&:hover': {
-                            bgcolor: theme.palette.error.light + '1A'
-                        }
+                        ...getListItemStyles(false, true), // Usa estilo "erro" (vermelho)
+                        color: 'error.main',
+                        '& .MuiListItemIcon-root': { color: 'error.main' },
                     }}
                 >
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                        <LogOut size={20} color={theme.palette.error.main} />
-                    </ListItemIcon>
-                    <ListItemText
-                        primary="Sair"
-                        primaryTypographyProps={{
-                            color: 'error.main',
-                            fontWeight: 600
-                        }}
-                    />
+                    <ListItemIcon><LogOut size={20} /></ListItemIcon>
+                    <ListItemText primary="Sair" primaryTypographyProps={{ fontWeight: 600, fontSize: '0.9rem' }} />
                 </ListItemButton>
             </Box>
         </Box>
@@ -231,34 +188,33 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }: SidebarProps
     return (
         <Box
             component="nav"
-            sx={{ width: { sm: DRAWER_WIDTH }, flexShrink: { sm: 0 } }}
+            sx={{ width: { sm: width }, flexShrink: { sm: 0 } }}
+            aria-label="menu lateral"
         >
+            {/* Drawer Mobile (Temporário) */}
             <Drawer
                 variant="temporary"
                 open={mobileOpen}
-                onClose={handleDrawerToggle}
+                onClose={onClose}
                 ModalProps={{ keepMounted: true }}
                 sx={{
                     display: { xs: 'block', sm: 'none' },
-                    '& .MuiDrawer-paper': { boxSizing: 'border-box', width: DRAWER_WIDTH },
+                    '& .MuiDrawer-paper': { boxSizing: 'border-box', width: width, borderRight: 'none', boxShadow: 4 }
                 }}
             >
-                {drawerContent}
+                {DrawerContent}
             </Drawer>
 
+            {/* Drawer Desktop (Permanente) */}
             <Drawer
                 variant="permanent"
                 sx={{
                     display: { xs: 'none', sm: 'block' },
-                    '& .MuiDrawer-paper': {
-                        boxSizing: 'border-box',
-                        width: DRAWER_WIDTH,
-                        borderRight: `1px solid ${theme.palette.divider}`
-                    },
+                    '& .MuiDrawer-paper': { boxSizing: 'border-box', width: width, borderRight: `1px dashed ${theme.palette.divider}`, bgcolor: 'background.paper' }
                 }}
                 open
             >
-                {drawerContent}
+                {DrawerContent}
             </Drawer>
         </Box>
     );

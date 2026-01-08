@@ -1,59 +1,65 @@
-import { createFileRoute, Outlet } from '@tanstack/react-router'
-import { useEffect, useState } from 'react';
-import { Box, Toolbar, useTheme, useMediaQuery, IconButton } from '@mui/material';
-import { Menu as MenuIcon } from 'lucide-react';
+import { createFileRoute, Outlet } from '@tanstack/react-router';
+import { Box, useTheme, IconButton } from '@mui/material';
+import { Menu } from 'lucide-react'; // Import do ícone de Menu
 import Sidebar from '@/components/layout/sidebar';
-import { useCardapioStore } from '@/store/cardapioStore';
+import { useState } from 'react';
 
 export const Route = createFileRoute('/_auth/painel')({
     component: PainelLayout,
-})
+});
 
 function PainelLayout() {
-    // Dentro do componente PainelLayout
-    const { checkDbStatusAndInit, stopListener } = useCardapioStore();
-
     const theme = useTheme();
-    const isDesktop = useMediaQuery(theme.breakpoints.up('sm'));
-    const [mobileOpen, setMobileOpen] = useState(false);
-    const DRAWER_WIDTH = 240;
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
-    const handleDrawerToggle = () => {
-        setMobileOpen(!mobileOpen);
-    };
-
-    useEffect(() => {
-        // Chama a função de verificação ao montar o componente
-        checkDbStatusAndInit();
-
-        return () => {
-            stopListener();
-        };
-    }, [checkDbStatusAndInit, stopListener]);
+    // Largura da sidebar no desktop
+    const sidebarWidth = 280;
 
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: theme.palette.background.default }}>
-            <Sidebar mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle} />
+        <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+            {/* Componente de Sidebar (Navegação Lateral) */}
+            <Sidebar
+                width={sidebarWidth}
+                mobileOpen={sidebarOpen}
+                onClose={() => setSidebarOpen(false)}
+            />
 
-            <Box component="main" sx={{
-                flexGrow: 1,
-                width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` },
-                ml: { sm: `${DRAWER_WIDTH}px` },
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: '100vh'
-            }}>
-                {!isDesktop && (
-                    <Toolbar>
-                        <IconButton color="inherit" aria-label="open drawer" edge="start" onClick={handleDrawerToggle} sx={{ mr: 2 }}>
-                            <MenuIcon />
-                        </IconButton>
-                    </Toolbar>
-                )}
+            {/* Área Principal de Conteúdo */}
+            <Box
+                component="main"
+                sx={{
+                    flexGrow: 1,
+                    // No desktop desconta a sidebar, no mobile ocupa 100%
+                    width: { sm: `calc(100% - ${sidebarWidth}px)` },
+                    minHeight: '100vh',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    p: { xs: 2, md: 3 },
+                }}
+            >
+                {/* BOTÃO MOBILE: Só aparece em telas pequenas (sm: 'none') */}
+                <Box sx={{ display: { sm: 'none' }, mb: 1 }}>
+                    <IconButton
+                        color="inherit"
+                        aria-label="abrir menu"
+                        edge="start"
+                        onClick={() => setSidebarOpen(true)}
+                        sx={{
+                            color: 'primary.main',
+                            bgcolor: 'background.paper',
+                            boxShadow: 1,
+                            borderRadius: 2,
+                            '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                    >
+                        <Menu size={24} />
+                    </IconButton>
+                </Box>
 
-                {/* Aqui serão renderizados o Dashboard, Pedidos, etc */}
-                <Box sx={{ p: { xs: 2, sm: 3 }, flexGrow: 1 }}>
-                    <Outlet />
+                {/* Conteúdo das Páginas (Dashboard, Pedidos, etc) */}
+                <Box sx={{ width: '100%', maxWidth: '100%', mx: 'auto' }}>
+                    {/* @ts-ignore - Passa o contexto caso alguma página filha precise forçar abertura */}
+                    <Outlet context={{ setSidebarOpen }} />
                 </Box>
             </Box>
         </Box>

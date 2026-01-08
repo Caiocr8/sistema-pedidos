@@ -1,6 +1,5 @@
-// src/lib/services/pedidos.ts
 import { db } from '@/lib/api/firebase/config';
-import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { doc, runTransaction, serverTimestamp, collection } from 'firebase/firestore';
 
 /**
  * Move um pedido da coleção ativa para finalizados.
@@ -26,7 +25,7 @@ export const finalizarPedido = async (pedido: any) => {
 };
 
 /**
- * Move um pedido para cancelados com motivo.
+ * Move um pedido para cancelados com motivo (Mesa Inteira).
  */
 export const cancelarPedido = async (pedido: any, motivo: string) => {
     const pedidoRef = doc(db, 'pedidos', pedido.docId);
@@ -42,7 +41,7 @@ export const cancelarPedido = async (pedido: any, motivo: string) => {
             status: 'cancelado',
             motivoCancelamento: motivo,
             cancelledAt: serverTimestamp(),
-            cancelledBy: 'usuario_atual' // Você pode pegar o ID do user da store
+            cancelledBy: 'usuario_atual'
         });
 
         // 2. Remove da coleção atual
@@ -50,16 +49,18 @@ export const cancelarPedido = async (pedido: any, motivo: string) => {
     });
 };
 
-
+/**
+ * Remove um item específico do pedido e registra o motivo em 'itens_cancelados'
+ */
 export const cancelarItemIndividual = async (
     pedidoId: string,
     pedidoData: any,
     itemIndex: number,
     motivo: string,
-    usuario: string = 'Garçom/Admin' // Idealmente viria do AuthContext
+    usuario: string = 'Garçom/Admin'
 ) => {
     const pedidoRef = doc(db, 'pedidos', pedidoId);
-    const cancelamentoRef = doc(collection(db, 'itens_cancelados')); // Cria ID automático
+    const cancelamentoRef = doc(collection(db, 'itens_cancelados'));
 
     await runTransaction(db, async (transaction) => {
         const docSnap = await transaction.get(pedidoRef);
@@ -68,12 +69,11 @@ export const cancelarItemIndividual = async (
         const dadosAtuais = docSnap.data();
         const itensAtuais = dadosAtuais.itens || [];
 
-        // Verifica se o índice é válido
         if (!itensAtuais[itemIndex]) throw new Error("Item não existe mais.");
 
         const itemRemovido = itensAtuais[itemIndex];
 
-        // 1. Cria o registro de auditoria (Log do cancelamento)
+        // 1. Cria o registro de auditoria
         transaction.set(cancelamentoRef, {
             pedidoId: pedidoId,
             mesa: dadosAtuais.mesa,
@@ -87,7 +87,6 @@ export const cancelarItemIndividual = async (
         // 2. Remove o item do array e recalcula
         itensAtuais.splice(itemIndex, 1);
 
-        // Recalcula total com segurança baseado no array restante
         const novoTotal = itensAtuais.reduce((acc: number, curr: any) => {
             return acc + (curr.precoUnitario * curr.quantidade);
         }, 0);
