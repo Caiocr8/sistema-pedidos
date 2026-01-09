@@ -1,7 +1,11 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import { Box, Paper, Stack, Typography, CircularProgress, Chip, Avatar, LinearProgress } from '@mui/material';
-import { ShoppingBag, DollarSign, CircleX, Clock, Star, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ShoppingBag, DollarSign, CircleX, Clock, Star, TrendingUp, TrendingDown, Minus, Printer } from 'lucide-react';
+
+// Bibliotecas de PDF
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Firebase
 import { db } from '@/lib/api/firebase/config';
@@ -32,6 +36,11 @@ interface ProductPerformance {
     trend: number; // Diferença (Hoje - Ontem)
 }
 
+// Interface para Métricas de Pagamento
+interface PaymentStats {
+    [key: string]: number; // Ex: { pix: 150.00, dinheiro: 50.00 }
+}
+
 // Helper de Tempo
 function getMinutesAgo(timestamp: any): number {
     if (!timestamp) return 0;
@@ -47,6 +56,11 @@ function formatTimeAgo(minutes: number): string {
     return `${hours}h ${mins}m`;
 }
 
+// Helper de Formatação de Moeda
+const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
+
 export const Route = createFileRoute('/_auth/painel/dashboard')({
     component: DashboardPage,
 })
@@ -58,6 +72,7 @@ function DashboardPage() {
     // Estados de Dados
     const [longRunningOrders, setLongRunningOrders] = useState<OrderData[]>([]);
     const [metrics, setMetrics] = useState({ vendasHoje: 0, pedidosHoje: 0, canceladosHoje: 0 });
+    const [paymentStats, setPaymentStats] = useState<PaymentStats>({});
     const [topProducts, setTopProducts] = useState<ProductPerformance[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -92,7 +107,6 @@ function DashboardPage() {
         });
 
         // 3. Processar Vendas (Hoje vs Ontem) para Métricas e Top Produtos
-        // Como precisamos de dados de ontem (que não muda em tempo real), faremos um fetch único para ontem e listen para hoje
         getDocs(qFinishedYesterday).then(snapOntem => {
             const vendasOntemMap: Record<string, number> = {};
             snapOntem.forEach(doc => {
@@ -106,10 +120,36 @@ function DashboardPage() {
             const unsubFinished = onSnapshot(qFinishedToday, (snapHoje) => {
                 let totalVendas = 0;
                 const vendasHojeMap: Record<string, { qtd: number, total: number }> = {};
+                const currentPayments: PaymentStats = {
+                    'Pix': 0,
+                    'Dinheiro': 0,
+                    'Cartão de Crédito': 0,
+                    'Cartão de Débito': 0,
+                    'Voucher': 0,
+                    'Outros': 0
+                };
 
                 snapHoje.forEach(doc => {
                     const data = doc.data();
                     totalVendas += data.total || 0;
+
+                    // Agregação por Método de Pagamento
+                    // Assume que o documento tem um campo 'metodoPagamento' ou similar
+                    // Caso não tenha, cai em 'Outros'
+                    let metodo = data.metodoPagamento || 'Outros';
+
+                    // Normalização simples para agrupar chaves similares
+                    const metodoLower = metodo.toLowerCase();
+                    if (metodoLower.includes('pix')) metodo = 'Pix';
+                    else if (metodoLower.includes('dinheiro') || metodoLower.includes('espécie')) metodo = 'Dinheiro';
+                    else if (metodoLower.includes('crédito')) metodo = 'Cartão de Crédito';
+                    else if (metodoLower.includes('débito')) metodo = 'Cartão de Débito';
+                    else if (metodoLower.includes('voucher') || metodoLower.includes('vale')) metodo = 'Voucher';
+                    else metodo = 'Outros';
+
+                    currentPayments[metodo] = (currentPayments[metodo] || 0) + (data.total || 0);
+
+                    // Agregação de Produtos
                     const itens = data.itens || [];
                     itens.forEach((i: any) => {
                         if (!vendasHojeMap[i.nome]) vendasHojeMap[i.nome] = { qtd: 0, total: 0 };
@@ -127,14 +167,13 @@ function DashboardPage() {
                     trend: dados.qtd - (vendasOntemMap[nome] || 0)
                 }));
 
-                // Ordenar por Qtd Hoje e pegar Top 5
                 setTopProducts(productsArray.sort((a, b) => b.qtdHoje - a.qtdHoje).slice(0, 5));
+                setPaymentStats(currentPayments);
 
-                // Atualizar Métricas Gerais
                 setMetrics(prev => ({
                     ...prev,
                     vendasHoje: totalVendas,
-                    pedidosHoje: snapHoje.size // Consideramos pedidos finalizados como a métrica principal de volume
+                    pedidosHoje: snapHoje.size
                 }));
                 setLoading(false);
             });
@@ -148,8 +187,118 @@ function DashboardPage() {
         };
     }, []);
 
-    // Atualiza o contador de "Volume Total" somando tudo
-    const totalPedidosDia = metrics.pedidosHoje + longRunningOrders.length + metrics.canceladosHoje; // Aproximação
+    const totalPedidosDia = metrics.pedidosHoje + longRunningOrders.length + metrics.canceladosHoje;
+
+    // --- FUNÇÃO DE GERAÇÃO DE RELATÓRIO PDF ---
+    const handleGenerateReport = () => {
+        const doc = new jsPDF();
+        const now = new Date();
+        const dataFormatada = now.toLocaleDateString('pt-BR');
+        const horaFormatada = now.toLocaleTimeString('pt-BR');
+
+        // Configurações de estilo
+        const primaryColor = [44, 62, 80]; // Dark Blue
+        const secondaryColor = [220, 220, 220]; // Light Gray
+
+        // 1. Cabeçalho
+        doc.setFontSize(22);
+        doc.setTextColor(44, 62, 80);
+        doc.text("Relatório de Fechamento de Caixa", 14, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Gerado em: ${dataFormatada} às ${horaFormatada}`, 14, 28);
+        doc.line(14, 32, 196, 32); // Linha separadora
+
+        // 2. Resumo Executivo (Cards)
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.text("Resumo Financeiro", 14, 42);
+
+        // Ticket Médio
+        const ticketMedio = metrics.pedidosHoje > 0 ? metrics.vendasHoje / metrics.pedidosHoje : 0;
+
+        const summaryData = [
+            ['Faturamento Bruto', formatCurrency(metrics.vendasHoje)],
+            ['Total de Pedidos Finalizados', metrics.pedidosHoje.toString()],
+            ['Ticket Médio', formatCurrency(ticketMedio)],
+            ['Pedidos Cancelados', metrics.canceladosHoje.toString()]
+        ];
+
+        autoTable(doc, {
+            startY: 45,
+            head: [['Indicador', 'Valor']],
+            body: summaryData,
+            theme: 'grid',
+            headStyles: { fillColor: [66, 66, 66] },
+            columnStyles: {
+                0: { cellWidth: 100, fontStyle: 'bold' },
+                1: { halign: 'right' }
+            },
+            styles: { fontSize: 11 }
+        });
+
+        // 3. Detalhamento por Forma de Pagamento (Fluxo de Caixa)
+        const finalY = (doc as any).lastAutoTable.finalY || 50;
+        doc.setFontSize(14);
+        doc.text("Detalhamento por Pagamento", 14, finalY + 15);
+
+        const paymentRows = Object.entries(paymentStats)
+            .filter(([_, value]) => value > 0) // Mostra apenas o que teve venda
+            .map(([method, value]) => {
+                const percent = metrics.vendasHoje > 0 ? (value / metrics.vendasHoje) * 100 : 0;
+                return [method, `${percent.toFixed(1)}%`, formatCurrency(value)];
+            });
+
+        // Adiciona linha de total
+        paymentRows.push(['TOTAL', '100%', formatCurrency(metrics.vendasHoje)]);
+
+        autoTable(doc, {
+            startY: finalY + 18,
+            head: [['Método', 'Partic. (%)', 'Valor']],
+            body: paymentRows,
+            theme: 'striped',
+            headStyles: { fillColor: [41, 128, 185] }, // Azul
+            footStyles: { fillColor: [200, 200, 200], textColor: 0, fontStyle: 'bold' },
+            columnStyles: {
+                1: { halign: 'center' },
+                2: { halign: 'right', fontStyle: 'bold' }
+            }
+        });
+
+        // 4. Produtos Mais Vendidos (Top 5)
+        const finalY2 = (doc as any).lastAutoTable.finalY || 100;
+        doc.setFontSize(14);
+        doc.text("Top 5 Produtos Mais Vendidos", 14, finalY2 + 15);
+
+        const productRows = topProducts.map(p => [
+            p.nome,
+            p.qtdHoje.toString(),
+            formatCurrency(p.totalHoje)
+        ]);
+
+        autoTable(doc, {
+            startY: finalY2 + 18,
+            head: [['Produto', 'Qtd.', 'Total']],
+            body: productRows,
+            theme: 'plain',
+            headStyles: { fillColor: [240, 240, 240], textColor: 0 },
+            columnStyles: {
+                1: { halign: 'center' },
+                2: { halign: 'right' }
+            }
+        });
+
+        // 5. Rodapé
+        const pageHeight = doc.internal.pageSize.height;
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text("Sistema de Pedidos - Relatório Gerencial", 14, pageHeight - 10);
+        doc.text("Página 1 de 1", 196, pageHeight - 10, { align: 'right' });
+
+        // Salvar PDF
+        doc.save(`fechamento_caixa_${now.toISOString().split('T')[0]}.pdf`);
+    };
 
     return (
         <Box sx={{ width: '100%' }}>
@@ -271,7 +420,16 @@ function DashboardPage() {
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
                     <Button variant="outlined" fullWidth onClick={() => router.navigate({ to: '/painel/cardapio' })}>Editar Cardápio</Button>
                     <Button variant="outlined" fullWidth onClick={() => router.navigate({ to: '/painel/pedidos' })}>Ver Mesas</Button>
-                    <Button variant="outlined" fullWidth onClick={() => window.print()}>Imprimir Relatório</Button>
+                    {/* Botão de Relatório Atualizado */}
+                    <Button
+                        variant="outlined"
+                        fullWidth
+                        onClick={handleGenerateReport}
+                        startIcon={<Printer size={16} />}
+                        disabled={loading}
+                    >
+                        Imprimir Relatório
+                    </Button>
                 </Box>
             </Paper>
 

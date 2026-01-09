@@ -6,7 +6,6 @@ import MuiButton, { ButtonProps as MuiButtonProps } from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import { styled } from '@mui/material/styles';
 
-
 export interface CustomButtonProps extends Omit<MuiButtonProps, 'variant'> {
   variant?: 'contained' | 'outlined' | 'text';
   loading?: boolean;
@@ -112,4 +111,5 @@ const Button: React.FC<CustomButtonProps> = ({
   );
 };
 
-export default StyledButton;
+// CORREÇÃO: Exportar o componente Button (wrapper) e não apenas o StyledButton
+export default Button;

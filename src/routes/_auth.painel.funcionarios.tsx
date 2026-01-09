@@ -1,154 +1,149 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Chip, IconButton, Avatar, Stack, Tooltip
+  Box, Paper, Typography, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, Chip, IconButton,
+  Avatar, Stack, CircularProgress
 } from '@mui/material';
-import { Plus, Pencil, Trash2, Shield, User, MoreVertical } from 'lucide-react';
-import Button from '@/components/ui/button';
-import StyledModal from '@/components/ui/modal';
+import { Plus, Trash2, UserCog, Shield, ShieldCheck, Utensils, MonitorCheck } from 'lucide-react';
+
+// Firebase
+import { db } from '@/lib/api/firebase/config';
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+
+// Componentes
+import Button from '@/components/ui/button'; // Seu botão personalizado
 import FuncionarioModal from '@/components/layout/funcionarios/modal/funcionario-modal';
+
+interface UserData {
+  id: string;
+  displayName: string;
+  email: string;
+  role: 'admin' | 'garcom' | 'caixa' | 'cozinha';
+  status?: string;
+}
 
 export const Route = createFileRoute('/_auth/painel/funcionarios')({
   component: FuncionariosPage,
 })
 
-// Mock inicial para visualização
-const MOCK_FUNCIONARIOS = [
-  { id: 1, nome: 'Caio Ribeiro', email: 'caio@exemplo.com', cargo: 'admin', status: 'ativo', avatar: 'C' },
-  { id: 2, nome: 'Maria Silva', email: 'maria@exemplo.com', cargo: 'garcom', status: 'ativo', avatar: 'M' },
-  { id: 3, nome: 'João Souza', email: 'joao@exemplo.com', cargo: 'cozinha', status: 'ferias', avatar: 'J' },
-  { id: 4, nome: 'Ana Costa', email: 'ana@exemplo.com', cargo: 'caixa', status: 'inativo', avatar: 'A' },
-];
-
-const roleMap: Record<string, { label: string, color: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning', icon: any }> = {
-  admin: { label: 'Administrador', color: 'primary', icon: Shield },
-  garcom: { label: 'Garçom', color: 'success', icon: User },
-  cozinha: { label: 'Cozinha', color: 'warning', icon: User },
-  caixa: { label: 'Caixa', color: 'info', icon: User },
-};
-
-const statusMap: Record<string, { label: string, color: 'success' | 'error' | 'warning' | 'default' }> = {
-  ativo: { label: 'Ativo', color: 'success' },
-  inativo: { label: 'Inativo', color: 'error' },
-  ferias: { label: 'Férias', color: 'warning' },
-};
-
 function FuncionariosPage() {
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [selectedFunc, setSelectedFunc] = useState<any>(null);
 
-  const handleEdit = (func: any) => {
-    setSelectedFunc(func);
-    setModalOpen(true);
-  };
+  useEffect(() => {
+    const q = query(collection(db, 'user'), orderBy('displayName', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const userData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as UserData));
+      setUsers(userData);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
-  const handleNew = () => {
-    setSelectedFunc(null);
-    setModalOpen(true);
-  };
+  const handleDelete = async (id: string, nome: string) => {
+    if (confirm(`Tem certeza que deseja remover ${nome}?`)) {
+      try {
+        await deleteDoc(doc(db, 'user', id));
+      } catch (error) {
+        console.error("Erro ao deletar:", error);
+      }
+    }
+  }
+
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case 'admin': return <Chip icon={<ShieldCheck size={14} />} label="Admin" color="primary" size="small" />;
+      case 'caixa': return <Chip icon={<MonitorCheck size={14} />} label="Caixa" color="secondary" size="small" />;
+      case 'garcom': return <Chip icon={<UserCog size={14} />} label="Garçom" color="success" size="small" />;
+      case 'cozinha': return <Chip icon={<Utensils size={14} />} label="Cozinha" color="warning" size="small" />;
+      default: return <Chip label={role} size="small" />;
+    }
+  }
 
   return (
-    <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
-
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', flexWrap: 'wrap', gap: 2 }}>
+    <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto' }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Box>
-          <Typography variant="h3" fontWeight={800} sx={{ fontFamily: 'Caveat, cursive', color: 'primary.main', mb: 1 }}>
-            Equipe
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Gerencie o acesso e permissões dos seus colaboradores.
-          </Typography>
+          <Typography variant="h5" fontWeight="bold">Gestão de Equipe</Typography>
+          <Typography variant="body2" color="text.secondary">Gerencie os acessos e funções dos colaboradores</Typography>
         </Box>
+        {/* Botão de Adicionar usando seu componente */}
         <Button
+          onClick={() => setModalOpen(true)}
+          startIcon={<Plus size={18} />}
           variant="contained"
-          size="large"
-          startIcon={<Plus size={20} />}
-          onClick={handleNew}
-          sx={{ px: 3 }}
         >
-          Adicionar Membro
+          Novo Funcionário
         </Button>
       </Box>
 
-      {/* Tabela */}
-      <Paper elevation={0} variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
-        <TableContainer>
-          <Table sx={{ minWidth: 650 }}>
-            <TableHead sx={{ bgcolor: 'action.hover' }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }}>COLABORADOR</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }}>CARGO</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }}>STATUS</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }} align="right">AÇÕES</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {MOCK_FUNCIONARIOS.map((row) => {
-                const RoleIcon = roleMap[row.cargo]?.icon || User;
-                return (
-                  <TableRow key={row.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+      <Paper elevation={2}>
+        {loading ? (
+          <Box p={4} display="flex" justifyContent="center"><CircularProgress /></Box>
+        ) : (
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Colaborador</TableCell>
+                  <TableCell>Função</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Ações</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id} hover>
                     <TableCell>
-                      <Stack direction="row" gap={2} alignItems="center">
-                        <Avatar sx={{ bgcolor: 'primary.light', color: 'primary.main', fontWeight: 'bold' }}>
-                          {row.avatar}
+                      <Stack direction="row" spacing={2} alignItems="center">
+                        <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>
+                          {user.displayName?.charAt(0).toUpperCase()}
                         </Avatar>
                         <Box>
-                          <Typography variant="subtitle2" fontWeight={600}>{row.nome}</Typography>
-                          <Typography variant="caption" color="text.secondary">{row.email}</Typography>
+                          <Typography variant="subtitle2" fontWeight={600}>
+                            {user.displayName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {user.email}
+                          </Typography>
                         </Box>
                       </Stack>
                     </TableCell>
+                    <TableCell>{getRoleBadge(user.role)}</TableCell>
                     <TableCell>
-                      <Chip
-                        icon={<RoleIcon size={14} />}
-                        label={roleMap[row.cargo]?.label}
-                        size="small"
-                        color={roleMap[row.cargo]?.color as any}
-                        variant="outlined"
-                        sx={{ fontWeight: 600, border: 'none', bgcolor: `${roleMap[row.cargo]?.color}.light` + '20' }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={statusMap[row.status]?.label}
-                        size="small"
-                        color={statusMap[row.status]?.color as any}
-                        sx={{ height: 24, fontWeight: 600 }}
-                      />
+                      <Chip label="Ativo" size="small" variant="outlined" color="success" sx={{ height: 20, fontSize: '0.65rem' }} />
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Editar">
-                        <IconButton size="small" onClick={() => handleEdit(row)} sx={{ mr: 1 }}>
-                          <Pencil size={18} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Remover">
-                        <IconButton size="small" color="error">
-                          <Trash2 size={18} />
-                        </IconButton>
-                      </Tooltip>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleDelete(user.id, user.displayName)}
+                        disabled={user.role === 'admin'}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                ))}
+                {users.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                      Nenhum funcionário cadastrado.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </Paper>
 
-      {/* Modal de Adicionar/Editar */}
-      <StyledModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={selectedFunc ? "Editar Colaborador" : "Novo Colaborador"}
-      >
-        <FuncionarioModal
-          initialData={selectedFunc}
-          onClose={() => setModalOpen(false)}
-        />
-      </StyledModal>
+      <FuncionarioModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </Box>
   );
 }

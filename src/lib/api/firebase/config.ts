@@ -6,7 +6,7 @@ import { getFirestore } from "firebase/firestore";
 // --------------------
 
 // Assume que as variáveis de ambiente estão configuradas corretamente
-const firebaseConfig = {
+export const firebaseConfig = {
     apiKey: import.meta.env.VITE_PUBLIC_FIREBASE_API_KEY,
     authDomain: import.meta.env.VITE_PUBLIC_FIREBASE_AUTH_DOMAIN,
     projectId: import.meta.env.VITE_PUBLIC_FIREBASE_PROJECT_ID,

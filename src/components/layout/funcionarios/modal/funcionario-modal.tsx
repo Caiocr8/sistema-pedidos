@@ -1,118 +1,157 @@
 import { useState } from 'react';
-import { Box, Stack, FormControl, InputLabel, Select, MenuItem, TextField, Typography, Avatar } from '@mui/material';
-import { Camera } from 'lucide-react';
-import Button from '@/components/ui/button';
+import {
+    Dialog, DialogTitle, DialogContent, DialogActions,
+    TextField, FormControl, InputLabel, Select, MenuItem,
+    Stack, Alert
+} from '@mui/material';
+import Button from '@/components/ui/button'; // Usa o seu botão personalizado
+
+// Firebase Imports
+import { deleteApp } from 'firebase/app';
+import { initializeApp as initApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db, firebaseConfig } from '@/lib/api/firebase/config';
 
 interface FuncionarioModalProps {
-    initialData?: any;
+    open: boolean;
     onClose: () => void;
 }
 
-export default function FuncionarioModal({ initialData, onClose }: FuncionarioModalProps) {
+export default function FuncionarioModal({ open, onClose }: FuncionarioModalProps) {
     const [loading, setLoading] = useState(false);
-    const [role, setRole] = useState(initialData?.cargo || 'garcom');
-    const [status, setStatus] = useState(initialData?.status || 'ativo');
+    const [error, setError] = useState('');
 
-    const handleSubmit = async () => {
+    // Form States
+    const [nome, setNome] = useState('');
+    const [email, setEmail] = useState('');
+    const [senha, setSenha] = useState('');
+    const [cargo, setCargo] = useState('garcom');
+
+    const handleSave = async () => {
+        if (!nome || !email || !senha) {
+            setError('Preencha todos os campos obrigatórios.');
+            return;
+        }
+        if (senha.length < 6) {
+            setError('A senha deve ter no mínimo 6 caracteres.');
+            return;
+        }
+
         setLoading(true);
-        // Simulação de delay de salvamento
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setLoading(false);
+        setError('');
+
+        // TÉCNICA DO APP SECUNDÁRIO para não deslogar o admin
+        const secondaryApp = initApp(firebaseConfig, "SecondaryApp");
+        const secondaryAuth = getAuth(secondaryApp);
+
+        try {
+            const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
+            const user = userCredential.user;
+
+            await updateProfile(user, { displayName: nome });
+
+            await setDoc(doc(db, 'user', user.uid), {
+                uid: user.uid,
+                displayName: nome,
+                email: email,
+                role: cargo,
+                createdAt: serverTimestamp(),
+                status: 'ativo'
+            });
+
+            handleClose();
+        } catch (err: any) {
+            console.error(err);
+            if (err.code === 'auth/email-already-in-use') {
+                setError('Este e-mail já está em uso.');
+            } else {
+                setError('Erro ao criar funcionário.');
+            }
+        } finally {
+            await deleteApp(secondaryApp);
+            setLoading(false);
+        }
+    };
+
+    const handleClose = () => {
+        setNome('');
+        setEmail('');
+        setSenha('');
+        setCargo('garcom');
+        setError('');
         onClose();
-        // Aqui entra a lógica de salvar no Firebase depois
     };
 
     return (
-        <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 3, minWidth: { sm: 450 } }}>
+        <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+            <DialogTitle sx={{ fontWeight: 600 }}>Novo Membro da Equipe</DialogTitle>
+            <DialogContent>
+                <Stack spacing={3} sx={{ mt: 1 }}>
+                    {error && <Alert severity="error">{error}</Alert>}
 
-            {/* Foto / Avatar */}
-            <Box display="flex" justifyContent="center" mb={1}>
-                <Box position="relative">
-                    <Avatar
-                        sx={{ width: 80, height: 80, bgcolor: 'primary.light', color: 'primary.main', fontSize: '2rem', fontWeight: 'bold' }}
-                    >
-                        {initialData?.nome?.[0] || 'N'}
-                    </Avatar>
-                    <Box
-                        sx={{
-                            position: 'absolute', bottom: 0, right: 0,
-                            bgcolor: 'background.paper', borderRadius: '50%', p: 0.5,
-                            boxShadow: 2, cursor: 'pointer', border: '1px solid #eee'
-                        }}
-                    >
-                        <Camera size={16} />
-                    </Box>
-                </Box>
-            </Box>
-
-            <Stack spacing={2}>
-                <TextField
-                    label="Nome Completo"
-                    fullWidth
-                    defaultValue={initialData?.nome}
-                    placeholder="Ex: João da Silva"
-                />
-
-                <TextField
-                    label="E-mail"
-                    type="email"
-                    fullWidth
-                    defaultValue={initialData?.email}
-                    placeholder="joao@restaurante.com"
-                />
-
-                {!initialData && (
                     <TextField
-                        label="Senha Inicial"
-                        type="password"
+                        label="Nome Completo"
                         fullWidth
-                        placeholder="••••••••"
+                        value={nome}
+                        onChange={(e) => setNome(e.target.value)}
                     />
-                )}
 
-                <Stack direction="row" spacing={2}>
-                    <FormControl fullWidth>
-                        <InputLabel>Cargo</InputLabel>
-                        <Select
-                            value={role}
-                            label="Cargo"
-                            onChange={(e) => setRole(e.target.value)}
-                        >
-                            <MenuItem value="admin">Administrador</MenuItem>
-                            <MenuItem value="garcom">Garçom</MenuItem>
-                            <MenuItem value="cozinha">Cozinha</MenuItem>
-                            <MenuItem value="caixa">Caixa</MenuItem>
-                        </Select>
-                    </FormControl>
+                    <TextField
+                        label="E-mail de Acesso"
+                        type="email"
+                        fullWidth
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                    />
 
-                    <FormControl fullWidth>
-                        <InputLabel>Status</InputLabel>
-                        <Select
-                            value={status}
-                            label="Status"
-                            onChange={(e) => setStatus(e.target.value)}
-                        >
-                            <MenuItem value="ativo">Ativo</MenuItem>
-                            <MenuItem value="ferias">Férias</MenuItem>
-                            <MenuItem value="inativo">Inativo</MenuItem>
-                        </Select>
-                    </FormControl>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                        <TextField
+                            label="Senha Inicial"
+                            type="password"
+                            fullWidth
+                            value={senha}
+                            onChange={(e) => setSenha(e.target.value)}
+                            helperText="Mínimo 6 caracteres"
+                        />
+
+                        <FormControl fullWidth>
+                            <InputLabel>Cargo / Função</InputLabel>
+                            <Select
+                                value={cargo}
+                                label="Cargo / Função"
+                                onChange={(e) => setCargo(e.target.value)}
+                            >
+                                <MenuItem value="garcom">Garçom</MenuItem>
+                                <MenuItem value="caixa">Caixa</MenuItem>
+                                <MenuItem value="cozinha">Cozinha</MenuItem>
+                                <MenuItem value="admin">Administrador</MenuItem>
+                            </Select>
+                        </FormControl>
+                    </Stack>
                 </Stack>
-            </Stack>
-
-            <Box display="flex" justifyContent="flex-end" gap={2} mt={2}>
-                <Button variant="outlined" color="inherit" onClick={onClose}>
+            </DialogContent>
+            <DialogActions sx={{ p: 3 }}>
+                {/* Botão de Cancelar usando variant text */}
+                <Button
+                    variant="text"
+                    onClick={handleClose}
+                    disabled={loading}
+                    color="inherit" // Para ficar cinza/neutro se desejar
+                >
                     Cancelar
                 </Button>
+
+                {/* Botão de Salvar usando loading nativo do seu componente */}
                 <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleSubmit}
+                    onClick={handleSave}
                     loading={loading}
+                    loadingText="Criando..."
+                    variant="contained"
                 >
-                    {initialData ? 'Salvar Alterações' : 'Criar Conta'}
+                    Criar Funcionário
                 </Button>
-            </Box>
-        </Box>
+            </DialogActions>
+        </Dialog>
     );
 }
