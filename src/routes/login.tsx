@@ -1,13 +1,14 @@
 import { createFileRoute, useRouter, Link } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import { Box, Grid, Paper, Typography, InputAdornment } from '@mui/material';
-import { Mail, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Mail, Eye, EyeOff, ArrowLeft, Lock } from 'lucide-react';
 import Button from '@/components/ui/button';
 import IconButton from '@/components/ui/icon-button';
 import Input from '@/components/forms/input';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/api/firebase/config';
 import { useUserStore } from '@/store/user-store';
+import { fetchUserDataFromFirestore } from '@/lib/api/firebase/user'; // Importe a função de busca
 
 export const Route = createFileRoute('/login')({
     component: LoginPage,
@@ -21,16 +22,14 @@ function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const { user, isAuthReady } = useUserStore();
+    const { login, user, isAuthReady } = useUserStore();
 
-    // Lógica de Redirecionamento Inteligente
+    // Redirecionamento de segurança caso o usuário acesse /login já estando logado
     useEffect(() => {
         if (isAuthReady && user) {
-            // Se for Garçom -> Pedidos
             if (user.role === 'garcom') {
                 router.navigate({ to: '/painel/pedidos' });
             } else {
-                // Admin ou Caixa -> Dashboard
                 router.navigate({ to: '/painel/dashboard' });
             }
         }
@@ -42,15 +41,43 @@ function LoginPage() {
         setError(null);
 
         try {
-            // Apenas autentica no Firebase. 
-            // O AuthProvider vai detectar o login, buscar a role (garcom/admin) 
-            // e atualizar o userStore, disparando o useEffect acima.
-            await signInWithEmailAndPassword(auth, email, password);
+            // 1. Autentica no Firebase Authentication
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const firebaseUser = userCredential.user;
 
-            // Não navegamos manualmente aqui para evitar redirecionar antes de saber o cargo
+            // 2. Busca manualmente os dados no Firestore para pegar o 'role'
+            const firestoreData = await fetchUserDataFromFirestore(firebaseUser.uid);
+            const role = firestoreData?.role || 'garcom'; // Define padrão se não encontrar
+
+            // 3. Atualiza a Store manualmente com o ROLE correto
+            login({
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                displayName: firebaseUser.displayName || firestoreData?.displayName,
+                photoURL: firebaseUser.photoURL || firestoreData?.photoURL,
+                role: role, // Aqui passamos o role explicitamente
+            });
+
+            // 4. Redireciona baseado no role recuperado agora
+            if (role === 'garcom') {
+                await router.navigate({ to: '/painel/pedidos' });
+            } else {
+                await router.navigate({ to: '/painel/dashboard' });
+            }
+
         } catch (err: any) {
-            setError("Erro ao fazer login. Verifique suas credenciais.");
-            setLoading(false); // Só para o loading se der erro
+            console.error("Erro login:", err);
+            let msg = "Erro ao fazer login.";
+
+            if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+                msg = "E-mail ou senha incorretos.";
+            } else if (err.code === 'auth/too-many-requests') {
+                msg = "Muitas tentativas. Tente novamente mais tarde.";
+            }
+
+            setError(msg);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -67,8 +94,22 @@ function LoginPage() {
                     <Paper elevation={6} sx={{ p: 5, borderRadius: 3, width: '100%', maxWidth: 400, textAlign: 'center' }}>
                         <Typography variant="h4" sx={{ fontFamily: 'Caveat, cursive', mb: 1 }}>Maria Bonita</Typography>
                         <form onSubmit={handleLogin}>
-                            <Input label="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} icon={<Mail size={18} />} fullWidth margin="normal" />
-                            <Input label="Senha" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} fullWidth margin="normal"
+                            <Input
+                                label="E-mail"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                icon={<Mail size={18} />}
+                                fullWidth
+                                margin="normal"
+                            />
+                            <Input
+                                label="Senha"
+                                type={showPassword ? 'text' : 'password'}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                icon={<Lock size={18} />}
+                                fullWidth
+                                margin="normal"
                                 InputProps={{
                                     endAdornment: (
                                         <InputAdornment position="end">
@@ -80,7 +121,17 @@ function LoginPage() {
                                 }}
                             />
                             {error && <Typography color="error" variant="body2" sx={{ mt: 1 }}>{error}</Typography>}
-                            <Button type="submit" variant="contained" loading={loading} fullWidth sx={{ mt: 3 }}>Entrar</Button>
+
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                loading={loading}
+                                disabled={loading || !!user}
+                                fullWidth
+                                sx={{ mt: 3 }}
+                            >
+                                {user ? "Entrando..." : "Entrar"}
+                            </Button>
                         </form>
                     </Paper>
                 </Grid>

@@ -15,13 +15,17 @@ function HomePage() {
     const { user, isAuthReady } = useUserStore();
 
     useEffect(() => {
-        // Tenta redirecionar para o painel se já estiver logado
+        // Redirecionamento automático se já estiver logado
         if (isAuthReady && user) {
-            router.navigate({ to: '/painel/dashboard' });
+            if (user.role === 'garcom') {
+                router.navigate({ to: '/painel/pedidos' });
+            } else {
+                router.navigate({ to: '/painel/dashboard' });
+            }
         }
     }, [isAuthReady, user, router]);
 
-    // --- CORREÇÃO: Mostra um Loading em vez de tela branca ---
+    // Tela de Carregamento
     if (isAuthReady && user) {
         return (
             <Box sx={{
@@ -39,8 +43,8 @@ function HomePage() {
             </Box>
         );
     }
-    // ---------------------------------------------------------
 
+    // Tela Inicial (Login/Ajuda)
     return (
         <Container maxWidth="sm" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', py: 4 }}>
             <Paper elevation={12} sx={{ p: { xs: 4, sm: 6 }, borderRadius: 5, textAlign: 'center', bgcolor: 'background.paper' }}>
