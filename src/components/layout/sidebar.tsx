@@ -3,18 +3,14 @@ import {
     Drawer, Box, Typography, Divider, List, ListItem, ListItemButton,
     ListItemIcon, ListItemText, Avatar, IconButton, Badge, Tooltip, useTheme, alpha
 } from '@mui/material';
-import { Home, User, UtensilsCrossed, LogOut, Menu as MenuIcon, Bell, Settings, Users } from 'lucide-react';
+import {
+    Home, User, UtensilsCrossed, LogOut, Menu as MenuIcon,
+    Bell, Settings, Users, Wallet
+} from 'lucide-react';
 import { Link, useRouter } from '@tanstack/react-router';
 import { useUserStore } from '@/store/user-store';
 import { auth } from '@/lib/api/firebase/config';
 import { signOut } from 'firebase/auth';
-
-// Itens base visíveis para todos os usuários
-const BASE_MENU_ITEMS = [
-    { text: 'Início', icon: Home, href: '/painel/dashboard' },
-    { text: 'Pedidos', icon: UtensilsCrossed, href: '/painel/pedidos' },
-    { text: 'Cardápio', icon: MenuIcon, href: '/painel/cardapio' },
-];
 
 interface SidebarProps {
     mobileOpen: boolean;
@@ -29,11 +25,32 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
 
     // 1. Constrói o menu baseado no cargo (role) do usuário
     const menuItems = useMemo(() => {
-        const items = [...BASE_MENU_ITEMS];
-        // Adiciona gestão de equipe apenas para admins
+        const items = [];
+
+        // Regra 1: Dashboard (Início)
+        // Garçons NÃO veem o dashboard, apenas operacionais
+        if (user?.role !== 'garcom') {
+            items.push({ text: 'Início', icon: Home, href: '/painel/dashboard' });
+        }
+
+        // Regra 2: Itens Comuns (Todos têm acesso)
+        items.push(
+            { text: 'Pedidos', icon: UtensilsCrossed, href: '/painel/pedidos' },
+            { text: 'Cardápio', icon: MenuIcon, href: '/painel/cardapio' }
+        );
+
+        // Regra 3: Caixa
+        // Apenas Admin e Operador de Caixa
+        if (user?.role === 'admin' || user?.role === 'caixa') {
+            items.push({ text: 'Caixa', icon: Wallet, href: '/painel/caixa' });
+        }
+
+        // Regra 4: Gestão de Equipe
+        // Apenas Admin
         if (user?.role === 'admin') {
             items.push({ text: 'Equipe', icon: Users, href: '/painel/funcionarios' });
         }
+
         return items;
     }, [user]);
 
@@ -55,8 +72,7 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
         }
     };
 
-    // 2. Gerador de Estilos Padronizados (Design System)
-    // Garante que todos os botões (menu e perfil) tenham o mesmo visual "profissional"
+    // 2. Gerador de Estilos Padronizados
     const getListItemStyles = (isActive: boolean, isError = false) => {
         const activeColor = isError ? theme.palette.error.main : theme.palette.primary.main;
         const activeBg = isError ? alpha(theme.palette.error.main, 0.1) : alpha(theme.palette.primary.main, 0.1);
@@ -69,19 +85,16 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
             color: isActive ? activeColor : theme.palette.text.primary,
             bgcolor: isActive ? activeBg : 'transparent',
             transition: 'all 0.2s ease-in-out',
-            // Estilo quando selecionado (MUI)
             '&.Mui-selected': {
                 bgcolor: activeBg,
                 color: activeColor,
                 '&:hover': { bgcolor: hoverBg },
                 '& .MuiListItemIcon-root': { color: activeColor },
             },
-            // Estilo de Hover
             '&:hover': {
                 bgcolor: isActive ? hoverBg : theme.palette.action.hover,
-                transform: 'translateX(4px)', // Efeito sutil de movimento
+                transform: 'translateX(4px)',
             },
-            // Ícone
             '& .MuiListItemIcon-root': {
                 minWidth: 40,
                 color: isActive ? activeColor : theme.palette.text.secondary,
@@ -90,7 +103,6 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
         };
     };
 
-    // Conteúdo interno do Drawer (extraído para evitar duplicação)
     const DrawerContent = (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
             {/* Cabeçalho / Perfil */}
@@ -99,7 +111,6 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
                     <Typography variant="h5" sx={{ fontFamily: 'Caveat, cursive', fontWeight: 700, color: 'primary.main' }}>
                         Maria Bonita
                     </Typography>
-                    {/* Ações Rápidas (Notificação/Config) */}
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                         <Tooltip title="Notificações">
                             <IconButton size="small" sx={{ color: 'text.secondary' }}>
@@ -114,7 +125,6 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
                     </Box>
                 </Box>
 
-                {/* Card do Usuário */}
                 <Box sx={{ p: 2, borderRadius: 3, bgcolor: alpha(theme.palette.primary.main, 0.08), border: '1px solid', borderColor: alpha(theme.palette.primary.main, 0.1) }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Avatar sx={{ width: 42, height: 42, bgcolor: 'primary.main', fontWeight: 700, fontSize: '1.1rem', boxShadow: 2 }}>
@@ -130,7 +140,7 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
 
             <Divider sx={{ borderStyle: 'dashed' }} />
 
-            {/* Menu Principal */}
+            {/* Menu Dinâmico */}
             <List sx={{ flexGrow: 1, px: 2, py: 2 }}>
                 {menuItems.map((item) => (
                     <ListItem key={item.href} disablePadding>
@@ -138,7 +148,7 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
                             {({ isActive }) => (
                                 <ListItemButton
                                     selected={isActive}
-                                    onClick={onClose} // Fecha menu mobile ao navegar
+                                    onClick={onClose}
                                     sx={getListItemStyles(isActive)}
                                 >
                                     <ListItemIcon><item.icon size={22} /></ListItemIcon>
@@ -155,7 +165,7 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
 
             <Divider sx={{ borderStyle: 'dashed' }} />
 
-            {/* Rodapé (Perfil e Sair) */}
+            {/* Rodapé */}
             <Box sx={{ p: 2 }}>
                 <Link to="/painel/perfil" style={{ textDecoration: 'none' }}>
                     {({ isActive }) => (
@@ -173,7 +183,7 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
                 <ListItemButton
                     onClick={handleLogout}
                     sx={{
-                        ...getListItemStyles(false, true), // Usa estilo "erro" (vermelho)
+                        ...getListItemStyles(false, true),
                         color: 'error.main',
                         '& .MuiListItemIcon-root': { color: 'error.main' },
                     }}
@@ -191,7 +201,6 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
             sx={{ width: { sm: width }, flexShrink: { sm: 0 } }}
             aria-label="menu lateral"
         >
-            {/* Drawer Mobile (Temporário) */}
             <Drawer
                 variant="temporary"
                 open={mobileOpen}
@@ -204,8 +213,6 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
             >
                 {DrawerContent}
             </Drawer>
-
-            {/* Drawer Desktop (Permanente) */}
             <Drawer
                 variant="permanent"
                 sx={{
@@ -218,4 +225,4 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
             </Drawer>
         </Box>
     );
-}
+} 

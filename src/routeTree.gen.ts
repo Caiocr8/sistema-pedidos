@@ -19,6 +19,7 @@ import { Route as AuthPainelPedidosRouteImport } from './routes/_auth.painel.ped
 import { Route as AuthPainelFuncionariosRouteImport } from './routes/_auth.painel.funcionarios'
 import { Route as AuthPainelDashboardRouteImport } from './routes/_auth.painel.dashboard'
 import { Route as AuthPainelCardapioRouteImport } from './routes/_auth.painel.cardapio'
+import { Route as AuthPainelCaixaRouteImport } from './routes/_auth.painel.caixa'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -69,12 +70,18 @@ const AuthPainelCardapioRoute = AuthPainelCardapioRouteImport.update({
   path: '/cardapio',
   getParentRoute: () => AuthPainelRoute,
 } as any)
+const AuthPainelCaixaRoute = AuthPainelCaixaRouteImport.update({
+  id: '/caixa',
+  path: '/caixa',
+  getParentRoute: () => AuthPainelRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ajuda': typeof AjudaRoute
   '/login': typeof LoginRoute
   '/painel': typeof AuthPainelRouteWithChildren
+  '/painel/caixa': typeof AuthPainelCaixaRoute
   '/painel/cardapio': typeof AuthPainelCardapioRoute
   '/painel/dashboard': typeof AuthPainelDashboardRoute
   '/painel/funcionarios': typeof AuthPainelFuncionariosRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByTo {
   '/ajuda': typeof AjudaRoute
   '/login': typeof LoginRoute
   '/painel': typeof AuthPainelRouteWithChildren
+  '/painel/caixa': typeof AuthPainelCaixaRoute
   '/painel/cardapio': typeof AuthPainelCardapioRoute
   '/painel/dashboard': typeof AuthPainelDashboardRoute
   '/painel/funcionarios': typeof AuthPainelFuncionariosRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   '/ajuda': typeof AjudaRoute
   '/login': typeof LoginRoute
   '/_auth/painel': typeof AuthPainelRouteWithChildren
+  '/_auth/painel/caixa': typeof AuthPainelCaixaRoute
   '/_auth/painel/cardapio': typeof AuthPainelCardapioRoute
   '/_auth/painel/dashboard': typeof AuthPainelDashboardRoute
   '/_auth/painel/funcionarios': typeof AuthPainelFuncionariosRoute
@@ -112,6 +121,7 @@ export interface FileRouteTypes {
     | '/ajuda'
     | '/login'
     | '/painel'
+    | '/painel/caixa'
     | '/painel/cardapio'
     | '/painel/dashboard'
     | '/painel/funcionarios'
@@ -123,6 +133,7 @@ export interface FileRouteTypes {
     | '/ajuda'
     | '/login'
     | '/painel'
+    | '/painel/caixa'
     | '/painel/cardapio'
     | '/painel/dashboard'
     | '/painel/funcionarios'
@@ -135,6 +146,7 @@ export interface FileRouteTypes {
     | '/ajuda'
     | '/login'
     | '/_auth/painel'
+    | '/_auth/painel/caixa'
     | '/_auth/painel/cardapio'
     | '/_auth/painel/dashboard'
     | '/_auth/painel/funcionarios'
@@ -221,10 +233,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthPainelCardapioRouteImport
       parentRoute: typeof AuthPainelRoute
     }
+    '/_auth/painel/caixa': {
+      id: '/_auth/painel/caixa'
+      path: '/caixa'
+      fullPath: '/painel/caixa'
+      preLoaderRoute: typeof AuthPainelCaixaRouteImport
+      parentRoute: typeof AuthPainelRoute
+    }
   }
 }
 
 interface AuthPainelRouteChildren {
+  AuthPainelCaixaRoute: typeof AuthPainelCaixaRoute
   AuthPainelCardapioRoute: typeof AuthPainelCardapioRoute
   AuthPainelDashboardRoute: typeof AuthPainelDashboardRoute
   AuthPainelFuncionariosRoute: typeof AuthPainelFuncionariosRoute
@@ -233,6 +253,7 @@ interface AuthPainelRouteChildren {
 }
 
 const AuthPainelRouteChildren: AuthPainelRouteChildren = {
+  AuthPainelCaixaRoute: AuthPainelCaixaRoute,
   AuthPainelCardapioRoute: AuthPainelCardapioRoute,
   AuthPainelDashboardRoute: AuthPainelDashboardRoute,
   AuthPainelFuncionariosRoute: AuthPainelFuncionariosRoute,

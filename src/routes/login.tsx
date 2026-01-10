@@ -9,7 +9,6 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/api/firebase/config';
 import { useUserStore } from '@/store/user-store';
 
-// ESSA PARTE É OBRIGATÓRIA:
 export const Route = createFileRoute('/login')({
     component: LoginPage,
 })
@@ -22,11 +21,18 @@ function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const { login, user, isAuthReady } = useUserStore();
+    const { user, isAuthReady } = useUserStore();
 
+    // Lógica de Redirecionamento Inteligente
     useEffect(() => {
         if (isAuthReady && user) {
-            router.navigate({ to: '/painel/dashboard' });
+            // Se for Garçom -> Pedidos
+            if (user.role === 'garcom') {
+                router.navigate({ to: '/painel/pedidos' });
+            } else {
+                // Admin ou Caixa -> Dashboard
+                router.navigate({ to: '/painel/dashboard' });
+            }
         }
     }, [isAuthReady, user, router]);
 
@@ -36,21 +42,15 @@ function LoginPage() {
         setError(null);
 
         try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const firebaseUser = userCredential.user;
+            // Apenas autentica no Firebase. 
+            // O AuthProvider vai detectar o login, buscar a role (garcom/admin) 
+            // e atualizar o userStore, disparando o useEffect acima.
+            await signInWithEmailAndPassword(auth, email, password);
 
-            login({
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || '',
-                displayName: firebaseUser.displayName || undefined,
-                photoURL: firebaseUser.photoURL || undefined,
-            });
-
-            router.navigate({ to: '/painel/dashboard' });
+            // Não navegamos manualmente aqui para evitar redirecionar antes de saber o cargo
         } catch (err: any) {
             setError("Erro ao fazer login. Verifique suas credenciais.");
-        } finally {
-            setLoading(false);
+            setLoading(false); // Só para o loading se der erro
         }
     };
 
@@ -79,7 +79,7 @@ function LoginPage() {
                                     )
                                 }}
                             />
-                            {error && <Typography color="error">{error}</Typography>}
+                            {error && <Typography color="error" variant="body2" sx={{ mt: 1 }}>{error}</Typography>}
                             <Button type="submit" variant="contained" loading={loading} fullWidth sx={{ mt: 3 }}>Entrar</Button>
                         </form>
                     </Paper>

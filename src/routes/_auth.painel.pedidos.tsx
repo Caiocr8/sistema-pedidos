@@ -212,7 +212,7 @@ function PedidosPage() {
             </Box>
             <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1, pb: 2 }}>
                 {loading && <Box display="flex" justifyContent="center" mt={10}><CircularProgress size={60} /></Box>}
-                {!loading && pedidos.length === 0 && <Paper sx={{ p: 8, textAlign: 'center', bgcolor: 'transparent', border: '2px dashed', borderColor: 'divider' }} elevation={0}><Typography variant="h5" color="text.secondary" fontWeight={600}>Salão Livre ✨</Typography></Paper>}
+                {!loading && pedidos.length === 0 && <Paper sx={{ p: 8, textAlign: 'center', bgcolor: 'transparent', border: '2px dashed', borderColor: 'divider' }} elevation={0}><Typography variant="h5" color="text.secondary" fontWeight={600}>Salão Livre</Typography></Paper>}
                 <Stack spacing={2}>{pedidos.map(p => (p.status !== 'entregue' && p.status !== 'cancelado') && (<PedidoCard key={p.docId} pedido={p} onOpenDetails={() => setDetailId(p.docId)} />))}</Stack>
             </Box>
             <StyledModal open={!!detailId} onClose={() => setDetailId(null)} title="">{pedidoAtivo && <ComandaContent pedido={pedidoAtivo} onClose={() => setDetailId(null)} />}</StyledModal>
