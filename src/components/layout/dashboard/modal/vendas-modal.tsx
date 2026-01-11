@@ -376,7 +376,6 @@ export default function VendasModalContent() {
         const fetchAndProcessData = async () => {
             setLoading(true);
             try {
-                // Busca todos os pedidos finalizados ordenados por data
                 const q = query(collection(db, 'pedidos_finalizados'), orderBy('finishedAt', 'asc'));
                 const snapshot = await getDocs(q);
 
@@ -388,16 +387,35 @@ export default function VendasModalContent() {
 
                     const date = data.finishedAt.toDate();
                     const year = date.getFullYear();
-                    const monthName = monthNames[date.getMonth()]; // "Jan", "Fev"...
+                    const monthName = monthNames[date.getMonth()];
                     const day = date.getDate();
 
                     const total = data.total || 0;
 
-                    let metodo = (data.metodoPagamento || '').toLowerCase();
-                    if (metodo.includes('cart')) metodo = 'cartao';
-                    else if (metodo.includes('pix')) metodo = 'pix';
-                    else if (metodo.includes('dinheiro')) metodo = 'dinheiro';
-                    else metodo = 'voucher';
+                    // --- NOVA LÓGICA DE CATEGORIZAÇÃO DE PAGAMENTO ---
+                    // Agora lemos o objeto 'pagamentos' se existir, ou fallback
+                    const pags = data.pagamentos || {};
+                    const methodAmounts = { pix: 0, cartao: 0, dinheiro: 0, voucher: 0 };
+
+                    if (Object.keys(pags).length > 0) {
+                        // Distribuir valores exatos
+                        Object.entries(pags).forEach(([metodo, valor]) => {
+                            const mLower = metodo.toLowerCase();
+                            const val = Number(valor);
+                            if (mLower.includes('pix')) methodAmounts.pix += val;
+                            else if (mLower.includes('dinheiro')) methodAmounts.dinheiro += val;
+                            else if (mLower.includes('cart')) methodAmounts.cartao += val;
+                            else if (mLower.includes('vale') || mLower.includes('voucher')) methodAmounts.voucher += val;
+                            else methodAmounts.cartao += val; // Default seguro
+                        });
+                    } else {
+                        // Legado: método único
+                        let metodo = (data.metodoPagamento || '').toLowerCase();
+                        if (metodo.includes('pix')) methodAmounts.pix = total;
+                        else if (metodo.includes('dinheiro')) methodAmounts.dinheiro = total;
+                        else if (metodo.includes('vale') || metodo.includes('voucher')) methodAmounts.voucher = total;
+                        else methodAmounts.cartao = total;
+                    }
 
                     if (!structure[year]) structure[year] = {};
 
@@ -412,9 +430,10 @@ export default function VendasModalContent() {
                     const monthData = structure[year][monthName];
 
                     monthData.total += total;
-                    if (monthData.payments[metodo] !== undefined) {
-                        monthData.payments[metodo] += total;
-                    }
+                    monthData.payments.pix += methodAmounts.pix;
+                    monthData.payments.cartao += methodAmounts.cartao;
+                    monthData.payments.dinheiro += methodAmounts.dinheiro;
+                    monthData.payments.voucher += methodAmounts.voucher;
 
                     let dayData = monthData.daily.find(d => d.day === day);
                     if (!dayData) {
@@ -424,12 +443,12 @@ export default function VendasModalContent() {
 
                     dayData.total += total;
                     dayData.orders += 1;
-                    if (dayData.payments[metodo] !== undefined) {
-                        dayData.payments[metodo] += total;
-                    }
+                    dayData.payments.pix += methodAmounts.pix;
+                    dayData.payments.cartao += methodAmounts.cartao;
+                    dayData.payments.dinheiro += methodAmounts.dinheiro;
+                    dayData.payments.voucher += methodAmounts.voucher;
                 });
 
-                // Ordenar os dias em cada mês (RESOLVE ERRO 4 e 5)
                 Object.values(structure).forEach((year: YearData) => {
                     Object.values(year).forEach((month: MonthData) => {
                         month.daily.sort((a: DailyData, b: DailyData) => a.day - b.day);
@@ -453,7 +472,6 @@ export default function VendasModalContent() {
         fetchAndProcessData();
     }, []);
 
-    // --- Handlers ---
     const handleTipoVisaoChange = (event: SelectChangeEvent) => setTipoVisao(event.target.value);
     const handleAnoChange = (event: SelectChangeEvent<number>) => {
         setAnoSelecionado(event.target.value as number);
@@ -467,7 +485,6 @@ export default function VendasModalContent() {
         if (newVal) setSubFiltroDia(newVal);
     };
 
-    // --- Preparação de Dados para Renderização ---
     const dataAno = salesData[anoSelecionado] || {};
 
     const monthlyData = monthNames.map(m => {
@@ -497,7 +514,6 @@ export default function VendasModalContent() {
 
     const dailyData = (dataAno[mesSelecionado] || {}).daily || [];
 
-    // --- Lógica de Dia Único e Período (RESOLVE ERRO 1 e 2) ---
     let diaUnicoData: any = null;
     let diaUnicoTitle = '';
 
@@ -508,7 +524,6 @@ export default function VendasModalContent() {
         const d = Number(dStr);
         const mName = monthNames[mIndex];
 
-        // Tipagem explícita aqui resolve o 'unknown'
         const dData = (salesData[y]?.[mName] as MonthData)?.daily.find((item: DailyData) => item.day === d);
         if (dData) {
             diaUnicoData = dData;
@@ -530,7 +545,6 @@ export default function VendasModalContent() {
 
         Object.entries(salesData).forEach(([yKey, months]) => {
             const year = Number(yKey);
-            // Tipagem explícita no loop (RESOLVE ERRO 3)
             Object.entries(months as YearData).forEach(([mName, mData]) => {
                 const mIndex = monthMap[mName];
                 (mData as MonthData).daily.forEach((day: DailyData) => {
@@ -558,7 +572,6 @@ export default function VendasModalContent() {
 
     return (
         <Stack spacing={3} sx={{ minWidth: { xs: '80vw', sm: '70vw', md: '50vw' } }}>
-            {/* --- 1. FILTROS --- */}
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
                 <FormControl size="small" fullWidth>
                     <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.5 }}>Tipo de Visão</Typography>
@@ -591,7 +604,6 @@ export default function VendasModalContent() {
                 )}
             </Stack>
 
-            {/* --- 2. SUB-FILTROS (Diário) --- */}
             {tipoVisao === 'Diário' && (
                 <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.paper' }}>
                     <ToggleButtonGroup value={subFiltroDia} exclusive onChange={handleSubFiltroDiaChange} size="small" color="primary" fullWidth sx={{ mb: 2 }}>
@@ -613,7 +625,6 @@ export default function VendasModalContent() {
                 </Paper>
             )}
 
-            {/* --- 3. LEGENDA E GRÁFICOS --- */}
             {(tipoVisao === 'Mensal' || tipoVisao === 'Anual') && <PaymentLegend />}
 
             <Box>
@@ -623,12 +634,10 @@ export default function VendasModalContent() {
                     {tipoVisao === 'Diário' && subFiltroDia === 'mesInteiro' && `Vendas de ${mesSelecionado}/${anoSelecionado}`}
                 </Typography>
 
-                {/* GRÁFICOS */}
                 {tipoVisao === 'Anual' && <StackedBarChart data={yearlyData} labelKey="year" />}
                 {tipoVisao === 'Mensal' && <StackedBarChart data={monthlyData} labelKey="month" />}
                 {tipoVisao === 'Diário' && subFiltroDia === 'mesInteiro' && <DailyBarChart data={dailyData} />}
 
-                {/* RESUMOS ESPECÍFICOS */}
                 {tipoVisao === 'Diário' && subFiltroDia === 'diaUnico' && (
                     diaUnicoData
                         ? <DailyPeriodSummary data={diaUnicoData} title={diaUnicoTitle} />

@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
-import { Box, Paper, Stack, Typography, CircularProgress, Chip, Avatar, LinearProgress } from '@mui/material';
-import { ShoppingBag, DollarSign, CircleX, Clock, Star, TrendingUp, TrendingDown, Minus, Printer } from 'lucide-react';
+import { Box, Paper, Stack, Typography, CircularProgress, Chip, Avatar, LinearProgress, Tooltip as MuiTooltip } from '@mui/material';
+import { ShoppingBag, DollarSign, CircleX, Clock, Star, TrendingUp, TrendingDown, Minus, Printer, Wallet } from 'lucide-react';
 
 // Firebase
 import { db } from '@/lib/api/firebase/config';
@@ -37,11 +37,6 @@ interface ProductPerformance {
     trend: number; // Diferença (Hoje - Ontem)
 }
 
-// Interface para Métricas de Pagamento
-interface PaymentStats {
-    [key: string]: number; // Ex: { pix: 150.00, dinheiro: 50.00 }
-}
-
 // Helper de Tempo
 function getMinutesAgo(timestamp: any): number {
     if (!timestamp) return 0;
@@ -63,16 +58,16 @@ export const Route = createFileRoute('/_auth/painel/dashboard')({
 
 function DashboardPage() {
     const router = useRouter();
-    const { user } = useUserStore(); // Recupera usuário logado para buscar o caixa dele
+    const { user } = useUserStore();
     const [modalOpen, setModalOpen] = useState<'vendas' | 'cancelados' | null>(null);
 
     // Estados de Dados
     const [longRunningOrders, setLongRunningOrders] = useState<OrderData[]>([]);
     const [metrics, setMetrics] = useState({ vendasHoje: 0, pedidosHoje: 0, canceladosHoje: 0 });
+    const [paymentMetrics, setPaymentMetrics] = useState<Record<string, number>>({});
     const [topProducts, setTopProducts] = useState<ProductPerformance[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Estado para o botão de imprimir
     const [generatingReport, setGeneratingReport] = useState(false);
 
     useEffect(() => {
@@ -84,18 +79,18 @@ function DashboardPage() {
         const yesterdayTs = Timestamp.fromDate(yesterday);
 
         // QUERIES
-        const qActive = query(collection(db, 'pedidos'), orderBy('createdAt', 'asc')); // Mais antigos primeiro
+        const qActive = query(collection(db, 'pedidos'), orderBy('createdAt', 'asc'));
         const qFinishedToday = query(collection(db, 'pedidos_finalizados'), where('finishedAt', '>=', todayTs));
         const qFinishedYesterday = query(collection(db, 'pedidos_finalizados'), where('finishedAt', '>=', yesterdayTs), where('finishedAt', '<', todayTs));
         const qCancelledToday = query(collection(db, 'pedidos_cancelados'), where('cancelledAt', '>=', todayTs));
 
-        // 1. Monitorar Pedidos Ativos (Longa Duração)
+        // 1. Monitorar Pedidos Ativos
         const unsubActive = onSnapshot(qActive, (snap) => {
             const longOrders = snap.docs
                 .map(d => ({ id: d.id, ...d.data() } as OrderData))
                 .filter(order => {
                     const minutes = getMinutesAgo(order.createdAt);
-                    return minutes >= 20; // Filtro: Apenas mesas abertas há mais de 20 min
+                    return minutes >= 20;
                 });
             setLongRunningOrders(longOrders);
         });
@@ -105,7 +100,7 @@ function DashboardPage() {
             setMetrics(prev => ({ ...prev, canceladosHoje: snap.size }));
         });
 
-        // 3. Processar Vendas (Hoje vs Ontem) para Métricas e Top Produtos
+        // 3. Processar Vendas (Hoje vs Ontem)
         getDocs(qFinishedYesterday).then(snapOntem => {
             const vendasOntemMap: Record<string, number> = {};
             snapOntem.forEach(doc => {
@@ -119,10 +114,32 @@ function DashboardPage() {
             const unsubFinished = onSnapshot(qFinishedToday, (snapHoje) => {
                 let totalVendas = 0;
                 const vendasHojeMap: Record<string, { qtd: number, total: number }> = {};
+                const paymentsMap: Record<string, number> = { 'Pix': 0, 'Dinheiro': 0, 'Cartão': 0, 'Vale': 0 };
 
                 snapHoje.forEach(doc => {
                     const data = doc.data();
                     totalVendas += data.total || 0;
+
+                    // --- PROCESSAMENTO DE PAGAMENTOS (NOVO) ---
+                    const pags = data.pagamentos || {};
+                    // Se tiver o objeto novo detalhado
+                    if (Object.keys(pags).length > 0) {
+                        Object.entries(pags).forEach(([metodo, valor]) => {
+                            const val = Number(valor);
+                            if (metodo.includes('Pix')) paymentsMap['Pix'] += val;
+                            else if (metodo.includes('Dinheiro')) paymentsMap['Dinheiro'] += val;
+                            else if (metodo.includes('Cartão')) paymentsMap['Cartão'] += val;
+                            else if (metodo.includes('Vale')) paymentsMap['Vale'] += val;
+                            else paymentsMap['Outros'] = (paymentsMap['Outros'] || 0) + val;
+                        });
+                    } else {
+                        // Fallback para legado (campo metodoPagamento único)
+                        let metodoAntigo = (data.metodoPagamento || 'Outros');
+                        if (metodoAntigo.includes('Pix')) paymentsMap['Pix'] += data.total;
+                        else if (metodoAntigo.includes('Dinheiro')) paymentsMap['Dinheiro'] += data.total;
+                        else if (metodoAntigo.includes('Cartão')) paymentsMap['Cartão'] += data.total;
+                        else paymentsMap['Outros'] = (paymentsMap['Outros'] || 0) + data.total;
+                    }
 
                     // Agregação de Produtos
                     const itens = data.itens || [];
@@ -133,7 +150,7 @@ function DashboardPage() {
                     });
                 });
 
-                // Montar Lista de Produtos com Comparação
+                // Top Produtos
                 const productsArray: ProductPerformance[] = Object.entries(vendasHojeMap).map(([nome, dados]) => ({
                     nome,
                     qtdHoje: dados.qtd,
@@ -143,6 +160,7 @@ function DashboardPage() {
                 }));
 
                 setTopProducts(productsArray.sort((a, b) => b.qtdHoje - a.qtdHoje).slice(0, 5));
+                setPaymentMetrics(paymentsMap);
 
                 setMetrics(prev => ({
                     ...prev,
@@ -163,31 +181,21 @@ function DashboardPage() {
 
     const totalPedidosDia = metrics.pedidosHoje + longRunningOrders.length + metrics.canceladosHoje;
 
-    // --- FUNÇÃO DE GERAÇÃO DE RELATÓRIO (PARCIAL DO CAIXA) ---
     const handleGenerateReport = async () => {
         if (!user?.uid) return;
         setGeneratingReport(true);
         try {
-            // 1. Busca a sessão de caixa ativa do usuário logado
             const sessao = await getCaixaAberto(user.uid);
-
             if (!sessao) {
-                alert("Você não possui um caixa aberto no momento. Abra o caixa na tela 'Caixa' para gerar relatórios.");
+                alert("Você não possui um caixa aberto no momento.");
                 return;
             }
-
-            // 2. Calcula os dados do relatório (parcial)
             const dados = await getDadosRelatorio(sessao);
-
-            // 3. Gera o texto no formato de cupom
             const texto = gerarCupomTexto(dados, 'PARCIAL', user.displayName || 'Operador');
-
-            // 4. Aciona a impressão
             imprimirRelatorio(texto);
-
         } catch (error) {
-            console.error("Erro ao gerar relatório:", error);
-            alert("Ocorreu um erro ao tentar gerar o relatório parcial. Tente novamente.");
+            console.error(error);
+            alert("Erro ao gerar relatório.");
         } finally {
             setGeneratingReport(false);
         }
@@ -196,7 +204,7 @@ function DashboardPage() {
     return (
         <Box sx={{ width: '100%' }}>
             {/* Cards */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 3, mb: 4 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 4 }}>
                 <Box onClick={() => setModalOpen('vendas')} sx={{ cursor: 'pointer' }}>
                     <MetricCard
                         title="Vendas Hoje"
@@ -204,6 +212,32 @@ function DashboardPage() {
                         badge="Ver detalhes" icon={DollarSign} iconColor="green" bgColor="success.light" valueColor="success.main"
                     />
                 </Box>
+
+                {/* NOVO CARD: RECEBIMENTOS DETALHADOS */}
+                <MuiTooltip
+                    title={
+                        <Stack spacing={0.5}>
+                            {Object.entries(paymentMetrics).map(([k, v]) => v > 0 && (
+                                <Typography key={k} variant="caption">{k}: R$ {v.toFixed(2)}</Typography>
+                            ))}
+                        </Stack>
+                    }
+                    arrow
+                >
+                    <Box sx={{ cursor: 'help' }}>
+                        <MetricCard
+                            title="Recebimentos (Dia)"
+                            value={Object.entries(paymentMetrics).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'} // Mostra o método principal
+                            badge={`R$ ${Object.values(paymentMetrics).reduce((a, b) => a + b, 0).toFixed(2)}`} // Total
+                            badgeColor="info"
+                            icon={Wallet}
+                            iconColor="#2196f3"
+                            bgColor="info.light"
+                            valueColor="text.primary"
+                        />
+                    </Box>
+                </MuiTooltip>
+
                 <MetricCard
                     title="Volume Total"
                     value={totalPedidosDia}
@@ -220,7 +254,7 @@ function DashboardPage() {
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '6fr 6fr' }, gap: 3, mb: 3 }}>
 
-                {/* 1. TOP PRODUTOS (Gráfico + Tendência) */}
+                {/* 1. TOP PRODUTOS */}
                 <Paper elevation={2} sx={{ p: 3 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
                         <Star size={24} color="#C68642" />
@@ -236,8 +270,6 @@ function DashboardPage() {
                                     </Stack>
                                     <Stack direction="row" gap={2} alignItems="center">
                                         <Typography variant="caption" color="text.secondary">{p.qtdHoje} un</Typography>
-
-                                        {/* Badge de Tendência */}
                                         <Chip
                                             icon={p.trend > 0 ? <TrendingUp size={12} /> : p.trend < 0 ? <TrendingDown size={12} /> : <Minus size={12} />}
                                             label={p.trend > 0 ? `+${p.trend}` : p.trend === 0 ? '=' : p.trend}
@@ -260,7 +292,7 @@ function DashboardPage() {
                     </Stack>
                 </Paper>
 
-                {/* 2. MESAS EM ALERTA (> 20 min) */}
+                {/* 2. MESAS EM ALERTA */}
                 <Paper elevation={2} sx={{ p: 3, borderLeft: '4px solid', borderColor: 'warning.main' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                         <Stack direction="row" gap={1} alignItems="center">
@@ -277,34 +309,25 @@ function DashboardPage() {
                                 return (
                                     <Paper key={order.id} variant="outlined" sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <Stack direction="row" gap={2} alignItems="center">
-                                            <Avatar variant="rounded" sx={{ bgcolor: 'warning.light', color: 'warning.dark', fontWeight: 'bold' }}>
-                                                {order.mesa}
-                                            </Avatar>
+                                            <Avatar variant="rounded" sx={{ bgcolor: 'warning.light', color: 'warning.dark', fontWeight: 'bold' }}>{order.mesa}</Avatar>
                                             <Box>
                                                 <Typography variant="subtitle2" fontWeight={700}>Mesa {order.mesa}</Typography>
                                                 <Typography variant="caption" color="text.secondary">Total: R$ {order.total.toFixed(2)}</Typography>
                                             </Box>
                                         </Stack>
                                         <Stack alignItems="flex-end">
-                                            <Typography variant="h6" fontWeight={800} color="warning.main">
-                                                {formatTimeAgo(mins)}
-                                            </Typography>
+                                            <Typography variant="h6" fontWeight={800} color="warning.main">{formatTimeAgo(mins)}</Typography>
                                             <Typography variant="caption" color="text.secondary">tempo decorrido</Typography>
                                         </Stack>
                                     </Paper>
                                 );
                             })}
                             {longRunningOrders.length === 0 && (
-                                <Box py={4} textAlign="center">
-                                    <Typography variant="body2" color="text.secondary">Todas as mesas estão com tempo de atendimento normal.</Typography>
-                                </Box>
+                                <Box py={4} textAlign="center"><Typography variant="body2" color="text.secondary">Todas as mesas estão com tempo de atendimento normal.</Typography></Box>
                             )}
                         </Stack>
                     }
-
-                    <Button variant="outlined" fullWidth sx={{ mt: 3 }} onClick={() => router.navigate({ to: '/painel/pedidos' })}>
-                        Ver Todas as Mesas
-                    </Button>
+                    <Button variant="outlined" fullWidth sx={{ mt: 3 }} onClick={() => router.navigate({ to: '/painel/pedidos' })}>Ver Todas as Mesas</Button>
                 </Paper>
             </Box>
 
@@ -313,18 +336,7 @@ function DashboardPage() {
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
                     <Button variant="outlined" fullWidth onClick={() => router.navigate({ to: '/painel/cardapio' })}>Editar Cardápio</Button>
                     <Button variant="outlined" fullWidth onClick={() => router.navigate({ to: '/painel/pedidos' })}>Ver Mesas</Button>
-
-                    {/* Botão de Relatório Atualizado (Integração Caixa) */}
-                    <Button
-                        variant="outlined"
-                        fullWidth
-                        onClick={handleGenerateReport}
-                        startIcon={generatingReport ? <CircularProgress size={16} /> : <Printer size={16} />}
-                        disabled={loading || generatingReport}
-                        sx={{ whiteSpace: 'nowrap' }}
-                    >
-                        {generatingReport ? 'Gerando...' : 'Relatório Parcial (Caixa)'}
-                    </Button>
+                    <Button variant="outlined" fullWidth onClick={handleGenerateReport} startIcon={generatingReport ? <CircularProgress size={16} /> : <Printer size={16} />} disabled={loading || generatingReport} sx={{ whiteSpace: 'nowrap' }}>{generatingReport ? 'Gerando...' : 'Relatório Parcial (Caixa)'}</Button>
                 </Box>
             </Paper>
 
