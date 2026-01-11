@@ -8,7 +8,7 @@ import Input from '@/components/forms/input';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/api/firebase/config';
 import { useUserStore } from '@/store/user-store';
-import { fetchUserDataFromFirestore } from '@/lib/api/firebase/user'; // Importe a função de busca
+import { fetchUserDataFromFirestore } from '@/lib/api/firebase/user';
 
 export const Route = createFileRoute('/login')({
     component: LoginPage,
@@ -19,12 +19,14 @@ function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+
+    // Estado de carregamento local
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const { login, user, isAuthReady } = useUserStore();
 
-    // Redirecionamento de segurança caso o usuário acesse /login já estando logado
+    // Redirecionamento de segurança (caso recarregue a página já logado)
     useEffect(() => {
         if (isAuthReady && user) {
             if (user.role === 'garcom') {
@@ -41,34 +43,38 @@ function LoginPage() {
         setError(null);
 
         try {
-            // 1. Autentica no Firebase Authentication
+            // 1. Autentica no Firebase
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             const firebaseUser = userCredential.user;
 
-            // 2. Busca manualmente os dados no Firestore para pegar o 'role'
+            // 2. Busca o Role no Firestore ANTES de atualizar o estado
             const firestoreData = await fetchUserDataFromFirestore(firebaseUser.uid);
-            const role = firestoreData?.role || 'garcom'; // Define padrão se não encontrar
+            const role = firestoreData?.role || 'garcom';
 
-            // 3. Atualiza a Store manualmente com o ROLE correto
+            // 3. Atualiza a Store Global com os dados completos
             login({
                 uid: firebaseUser.uid,
                 email: firebaseUser.email || '',
                 displayName: firebaseUser.displayName || firestoreData?.displayName,
                 photoURL: firebaseUser.photoURL || firestoreData?.photoURL,
-                role: role, // Aqui passamos o role explicitamente
+                role: role,
             });
 
-            // 4. Redireciona baseado no role recuperado agora
+            // 4. Redireciona para a rota correta (sem passar pelo dashboard)
             if (role === 'garcom') {
                 await router.navigate({ to: '/painel/pedidos' });
             } else {
                 await router.navigate({ to: '/painel/dashboard' });
             }
 
+            // NOTA: Não damos setLoading(false) aqui. 
+            // Deixamos o botão "carregando" até a página mudar.
+
         } catch (err: any) {
             console.error("Erro login:", err);
-            let msg = "Erro ao fazer login.";
 
+            // Tratamento de erros
+            let msg = "Erro ao fazer login.";
             if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
                 msg = "E-mail ou senha incorretos.";
             } else if (err.code === 'auth/too-many-requests') {
@@ -76,8 +82,7 @@ function LoginPage() {
             }
 
             setError(msg);
-        } finally {
-            setLoading(false);
+            setLoading(false); // Só paramos o loading se der ERRO
         }
     };
 
@@ -126,11 +131,11 @@ function LoginPage() {
                                 type="submit"
                                 variant="contained"
                                 loading={loading}
-                                disabled={loading || !!user}
+                                disabled={loading} // Depende apenas do loading, não do user
                                 fullWidth
                                 sx={{ mt: 3 }}
                             >
-                                {user ? "Entrando..." : "Entrar"}
+                                {loading ? "Entrando..." : "Entrar"}
                             </Button>
                         </form>
                     </Paper>
