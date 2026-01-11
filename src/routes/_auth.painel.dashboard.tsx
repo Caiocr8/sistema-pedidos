@@ -204,7 +204,7 @@ function DashboardPage() {
     return (
         <Box sx={{ width: '100%' }}>
             {/* Cards */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 4 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 3, mb: 4 }}>
                 <Box onClick={() => setModalOpen('vendas')} sx={{ cursor: 'pointer' }}>
                     <MetricCard
                         title="Vendas Hoje"
@@ -213,30 +213,7 @@ function DashboardPage() {
                     />
                 </Box>
 
-                {/* NOVO CARD: RECEBIMENTOS DETALHADOS */}
-                <MuiTooltip
-                    title={
-                        <Stack spacing={0.5}>
-                            {Object.entries(paymentMetrics).map(([k, v]) => v > 0 && (
-                                <Typography key={k} variant="caption">{k}: R$ {v.toFixed(2)}</Typography>
-                            ))}
-                        </Stack>
-                    }
-                    arrow
-                >
-                    <Box sx={{ cursor: 'help' }}>
-                        <MetricCard
-                            title="Recebimentos (Dia)"
-                            value={Object.entries(paymentMetrics).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'} // Mostra o método principal
-                            badge={`R$ ${Object.values(paymentMetrics).reduce((a, b) => a + b, 0).toFixed(2)}`} // Total
-                            badgeColor="info"
-                            icon={Wallet}
-                            iconColor="#2196f3"
-                            bgColor="info.light"
-                            valueColor="text.primary"
-                        />
-                    </Box>
-                </MuiTooltip>
+
 
                 <MetricCard
                     title="Volume Total"

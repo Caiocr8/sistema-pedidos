@@ -16,9 +16,11 @@ import { collection, onSnapshot, query, orderBy, doc, updateDoc, Firestore } fro
 import { db } from '@/lib/api/firebase/config';
 import { useCardapioStore } from '@/store/cardapioStore';
 import { finalizarPedido, cancelarPedido, cancelarItemIndividual } from '@/lib/services/pedidos';
-import { gerarTextoCupom, imprimirRelatorio } from '@/lib/utils/print-service';
+import { gerarViasRecibo, imprimirRelatorio } from '@/lib/utils/print-service'; // Importação Atualizada
+import { useUserStore } from '@/store/user-store';
+import { getCaixaAberto } from '@/lib/services/caixa';
 
-import StyledModal from '@/components/ui/modal';
+import StyledModal from '@/components/ui/modal'; // Seu Modal
 import Button from '@/components/ui/button';
 import NovoPedidoModal from '@/components/layout/pedidos/modal/novo-pedido';
 import CancelarModal from '@/components/layout/pedidos/modal/cancelar-pedido';
@@ -80,22 +82,19 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
         'Dinheiro': 0, 'Pix': 0, 'Cartão Crédito': 0, 'Cartão Débito': 0, 'Vale Refeição': 0
     });
 
-    // Parcelamento (Só aplica se tiver valor em Cartão Crédito)
     const [parcelas, setParcelas] = useState(1);
-
-    // Descontos
     const [tipoDesconto, setTipoDesconto] = useState<'porcentagem' | 'valor'>('valor');
     const [valorDescontoInput, setValorDescontoInput] = useState<string>('');
-
-    // Nota Fiscal
     const [docCliente, setDocCliente] = useState('');
     const [tipoDoc, setTipoDoc] = useState('CPF');
     const [loading, setLoading] = useState(false);
 
+    // --- NOVO: Estado para controle de impressão ---
+    const [modalClienteOpen, setModalClienteOpen] = useState(false);
+    const [textoViaCliente, setTextoViaCliente] = useState('');
+
     // --- CÁLCULOS ---
     const subtotal = pedido.total;
-
-    // Calcula valor do desconto
     let descontoCalculado = 0;
     const descInput = parseFloat(valorDescontoInput) || 0;
     if (tipoDesconto === 'porcentagem') {
@@ -103,36 +102,25 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
     } else {
         descontoCalculado = descInput;
     }
-    // Garante que desconto não seja maior que total
     if (descontoCalculado > subtotal) descontoCalculado = subtotal;
 
     const totalComDesconto = subtotal - descontoCalculado;
     const totalPago = Object.values(valores).reduce((acc, val) => acc + val, 0);
     const saldo = totalComDesconto - totalPago;
-
-    // Lógica do Troco: Só existe se saldo < 0
     const troco = saldo < 0 ? Math.abs(saldo) : 0;
     const restante = saldo > 0 ? saldo : 0;
-
-    // Validação Final
     const prontoParaFinalizar = saldo <= 0.01;
 
     // --- HANDLERS ---
     const handleValorChange = (metodo: string, valorStr: string) => {
         let novoValor = parseFloat(valorStr);
         if (isNaN(novoValor) || novoValor < 0) novoValor = 0;
-
-        // REGRA: Se não for dinheiro, não pode pagar mais que o restante
         if (metodo !== 'Dinheiro') {
             const outrosPagamentos = Object.entries(valores)
                 .filter(([key]) => key !== metodo)
                 .reduce((acc, [_, val]) => acc + val, 0);
-
             const maxPermitido = Math.max(0, totalComDesconto - outrosPagamentos);
-
-            if (novoValor > maxPermitido) {
-                novoValor = maxPermitido;
-            }
+            if (novoValor > maxPermitido) novoValor = maxPermitido;
         }
         setValores(prev => ({ ...prev, [metodo]: novoValor }));
     };
@@ -148,10 +136,11 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                     valorCalculado: descontoCalculado
                 } : undefined,
                 totalFinal: totalComDesconto,
-                parcelas: valores['Cartão Crédito'] > 0 ? parcelas : 1 // Salva parcelas se usou crédito
+                parcelas: valores['Cartão Crédito'] > 0 ? parcelas : 1
             });
 
-            const textoCupom = gerarTextoCupom(
+            // Geração das Vias Separadas
+            const vias = gerarViasRecibo(
                 { ...pedido, total: subtotal, valorOriginal: subtotal },
                 valores,
                 troco,
@@ -161,8 +150,15 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                 valores['Cartão Crédito'] > 0 ? parcelas : 1
             );
 
-            imprimirRelatorio(textoCupom);
-            onFinalizar();
+            // 1. Imprime Via do Estabelecimento IMEDIATAMENTE
+            imprimirRelatorio(vias.viaEstabelecimento);
+
+            // 2. Prepara e abre modal para Via do Cliente
+            setTextoViaCliente(vias.viaCliente);
+            setModalClienteOpen(true);
+            setLoading(false);
+
+            // Nota: Não chamamos onFinalizar() aqui, será chamado no fechar do modal
         } catch (error) {
             console.error(error);
             alert("Erro ao finalizar pedido.");
@@ -178,17 +174,14 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
             </Box>
 
             <Box sx={{ display: 'flex', gap: 3, height: '100%', flexDirection: { xs: 'column', md: 'row' } }}>
-
                 {/* COLUNA ESQUERDA: Inputs e Configurações */}
                 <Stack spacing={2} sx={{ flex: 1.5, overflowY: 'auto', pr: 1 }}>
-
                     {/* DESCONTO */}
                     <Paper elevation={0} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                         <Box display="flex" alignItems="center" gap={1} mb={2}>
                             <Ticket size={18} className="text-orange-500" />
                             <Typography variant="subtitle2" fontWeight={700}>Desconto</Typography>
                         </Box>
-
                         <Stack direction="row" spacing={2}>
                             <ToggleButtonGroup
                                 value={tipoDesconto}
@@ -200,7 +193,6 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                                 <ToggleButton value="valor" sx={{ px: 2 }}>R$</ToggleButton>
                                 <ToggleButton value="porcentagem" sx={{ px: 2 }}><Percent size={14} /></ToggleButton>
                             </ToggleButtonGroup>
-
                             <TextField
                                 placeholder={tipoDesconto === 'porcentagem' ? "0%" : "0,00"}
                                 type="number"
@@ -244,8 +236,6 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                                                 {metodo}
                                             </Typography>
                                         </Box>
-
-                                        {/* SELETOR DE PARCELAS (Só aparece se for Crédito) */}
                                         {isCredito && (
                                             <FormControl size="small" sx={{ width: 90 }}>
                                                 <Select
@@ -261,7 +251,6 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                                                 </Select>
                                             </FormControl>
                                         )}
-
                                         <TextField
                                             placeholder={falta > 0 && !isDinheiro ? `Máx ${falta.toFixed(2)}` : "0,00"}
                                             type="number"
@@ -376,13 +365,48 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                     </Paper>
                 </Box>
             </Box>
+
+            {/* --- MODAL DE CONFIRMAÇÃO DA VIA DO CLIENTE --- */}
+            <StyledModal
+                open={modalClienteOpen}
+                onClose={() => { setModalClienteOpen(false); onFinalizar(); }}
+                title="Impressão de Recibo"
+            >
+                <Box sx={{ textAlign: 'center', p: 2 }}>
+                    <Typography variant="h6" gutterBottom fontWeight={600}>
+                        Pagamento Registrado com Sucesso!
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+                        A via do estabelecimento foi impressa. Deseja imprimir a <b>Via do Cliente</b>?
+                    </Typography>
+
+                    <Stack direction="row" spacing={2} justifyContent="center">
+                        <Button
+                            variant="outlined"
+                            color="inherit"
+                            size="large"
+                            onClick={() => { setModalClienteOpen(false); onFinalizar(); }}
+                            startIcon={<X />}
+                            sx={{ minWidth: 140 }}
+                        >
+                            Não (Fechar)
+                        </Button>
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            size="large"
+                            onClick={() => { imprimirRelatorio(textoViaCliente); setModalClienteOpen(false); onFinalizar(); }}
+                            startIcon={<Printer />}
+                            sx={{ minWidth: 140 }}
+                        >
+                            Sim, Imprimir
+                        </Button>
+                    </Stack>
+                </Box>
+            </StyledModal>
         </Box>
     );
 };
-
-// ... MANTENHA O RESTANTE DO ARQUIVO IGUAL (ComandaContent, PedidoCard, etc.) ...
-// Apenas garanta que ComandaContent usa o componente TelaPagamento atualizado.
-// Vou repetir a parte final para garantir que você tenha o arquivo completo e integro.
 
 const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void }) => {
     const { itens: cardapio } = useCardapioStore();
@@ -534,6 +558,9 @@ function PedidosPage() {
     const [detailId, setDetailId] = useState<string | null>(null);
     const [novoOpen, setNovoOpen] = useState(false);
 
+    const [verificandoCaixa, setVerificandoCaixa] = useState(false);
+    const { user } = useUserStore();
+
     useEffect(() => {
         const q = query(collection(db as Firestore, 'pedidos'), orderBy('createdAt', 'asc'));
         return onSnapshot(q, (snap) => {
@@ -547,6 +574,25 @@ function PedidosPage() {
 
     const mesasAtivas = pedidos.filter(p => p.status !== 'entregue').length;
 
+    const handleAbrirNovaMesa = async () => {
+        if (!user?.uid) return;
+
+        setVerificandoCaixa(true);
+        try {
+            const caixa = await getCaixaAberto(user.uid);
+            if (!caixa) {
+                alert("⚠️ CAIXA FECHADO\n\nÉ necessário abrir o caixa antes de iniciar um novo pedido.");
+            } else {
+                setNovoOpen(true);
+            }
+        } catch (error) {
+            console.error("Erro ao verificar caixa:", error);
+            alert("Erro ao verificar status do caixa.");
+        } finally {
+            setVerificandoCaixa(false);
+        }
+    };
+
     return (
         <Box sx={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column', width: '100%', mx: 'auto', p: { xs: 2, md: 4 } }}>
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'end' }}>
@@ -554,7 +600,16 @@ function PedidosPage() {
                     <Typography variant="h3" fontWeight={800} sx={{ fontFamily: 'Caveat, cursive', color: 'primary.main', mb: 1 }}>Controle de Mesas</Typography>
                     <Typography variant="body1" color="text.secondary">{mesasAtivas} {mesasAtivas === 1 ? 'mesa ativa' : 'mesas ativas'}</Typography>
                 </Box>
-                <Button variant="contained" size="large" startIcon={<Plus size={24} />} onClick={() => setNovoOpen(true)} sx={{ borderRadius: 3, px: 4, py: 1.5, fontSize: '1.1rem' }}>Nova Mesa</Button>
+                <Button
+                    variant="contained"
+                    size="large"
+                    startIcon={<Plus size={24} />}
+                    onClick={handleAbrirNovaMesa}
+                    loading={verificandoCaixa}
+                    sx={{ borderRadius: 3, px: 4, py: 1.5, fontSize: '1.1rem' }}
+                >
+                    Nova Mesa
+                </Button>
             </Box>
             <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1, pb: 2 }}>
                 {loading && <Box display="flex" justifyContent="center" mt={10}><CircularProgress size={60} /></Box>}
