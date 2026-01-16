@@ -15,10 +15,11 @@ import {
 import { collection, onSnapshot, query, orderBy, doc, updateDoc, Firestore } from 'firebase/firestore';
 import { db } from '@/lib/api/firebase/config';
 import { useCardapioStore } from '@/store/cardapioStore';
-import { finalizarPedido, cancelarPedido, cancelarItemIndividual } from '@/lib/services/pedidos';
+import { cancelarPedido, cancelarItemIndividual } from '@/lib/services/pedidos';
+import { processarVenda, getCaixaAberto } from '@/lib/services/caixa'; // <--- NOVO SERVIÇO
 import { gerarViasRecibo, imprimirRelatorio } from '@/lib/utils/print-service';
 import { useUserStore } from '@/store/user-store';
-import { getCaixaAberto } from '@/lib/services/caixa';
+import { useCaixaStore } from '@/store/caixa-store'; // <--- NOVO STORE
 
 import StyledModal from '@/components/ui/modal';
 import Button from '@/components/ui/button';
@@ -75,9 +76,11 @@ const OrderTimer = ({ createdAt, status, large = false }: { createdAt: any, stat
     );
 };
 
-// --- TELA DE PAGAMENTO OTIMIZADA ---
+// --- TELA DE PAGAMENTO OTIMIZADA E INTEGRADA AO CAIXA ---
 const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVoltar: () => void, onFinalizar: () => void }) => {
     const { user } = useUserStore();
+    const { caixaId, caixaAberto } = useCaixaStore(); // <--- INTEGRACAO COM STORE
+
     const [valores, setValores] = useState<Record<string, number>>({
         'Dinheiro': 0, 'Pix': 0, 'Cartão Crédito': 0, 'Cartão Débito': 0, 'Vale Refeição': 0
     });
@@ -108,12 +111,15 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
     const saldo = totalComDesconto - totalPago;
     const troco = saldo < 0 ? Math.abs(saldo) : 0;
     const restante = saldo > 0 ? saldo : 0;
+    // Permitimos finalizar com uma pequena margem de erro de arredondamento
     const prontoParaFinalizar = saldo <= 0.01;
 
     // --- HANDLERS ---
     const handleValorChange = (metodo: string, valorStr: string) => {
         let novoValor = parseFloat(valorStr);
         if (isNaN(novoValor) || novoValor < 0) novoValor = 0;
+
+        // Lógica inteligente para preencher o restante automaticamente
         if (metodo !== 'Dinheiro') {
             const outrosPagamentos = Object.entries(valores)
                 .filter(([key]) => key !== metodo)
@@ -127,26 +133,26 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
     const handleConcluir = async () => {
         if (!user?.uid) return alert("Erro: Usuário não identificado.");
 
+        // VALIDACAO DO CAIXA ANTES DE PAGAR
+        if (!caixaAberto || !caixaId) {
+            alert("⚠️ CAIXA FECHADO\n\nVocê precisa abrir o caixa no painel 'Caixa' antes de receber pagamentos.");
+            return;
+        }
+
         setLoading(true);
         try {
-            await finalizarPedido(
+            // CHAMADA AO NOVO SERVIÇO ATÔMICO
+            await processarVenda(
+                caixaId,
                 pedido.docId,
-                valores,
-                {
-                    troco,
-                    desconto: descontoCalculado > 0 ? {
-                        tipo: tipoDesconto,
-                        valorInput: parseFloat(valorDescontoInput) || 0,
-                        valorCalculado: descontoCalculado
-                    } : undefined,
-                    totalFinal: totalComDesconto,
-                    parcelas: valores['Cartão Crédito'] > 0 ? parcelas : 1
-                },
-                user.uid,
-                user.displayName || 'Operador'
+                totalComDesconto,
+                valores, // Passa o objeto completo { Dinheiro: X, Pix: Y }
+                troco,
+                descontoCalculado,
+                user.uid
             );
 
-            // Geração das Vias Separadas
+            // Geração das Vias Separadas (Visualização)
             const vias = gerarViasRecibo(
                 { ...pedido, total: subtotal, valorOriginal: subtotal },
                 valores,
@@ -165,9 +171,9 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
             setModalClienteOpen(true);
             setLoading(false);
 
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert("Erro ao finalizar pedido. Verifique se o caixa está aberto.");
+            alert(`Erro ao finalizar venda: ${error.message}`);
             setLoading(false);
         }
     };
@@ -177,10 +183,18 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
             <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
                 <IconButton onClick={onVoltar} size="small"><ArrowLeft /></IconButton>
                 <Typography variant="h5" fontWeight={700}>Pagamento / Fechamento</Typography>
+
+                {/* Indicador de Caixa */}
+                {caixaAberto ? (
+                    <Chip label="Caixa Aberto" color="success" size="small" variant="outlined" icon={<CheckCircle size={14} />} />
+                ) : (
+                    <Chip label="Caixa Fechado" color="error" size="small" variant="filled" icon={<Ban size={14} />} />
+                )}
             </Box>
 
             <Box sx={{ display: 'flex', gap: 3, height: '100%', flexDirection: { xs: 'column', md: 'row' } }}>
                 <Stack spacing={2} sx={{ flex: 1.5, overflowY: 'auto', pr: 1 }}>
+                    {/* Bloco de Desconto */}
                     <Paper elevation={0} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                         <Box display="flex" alignItems="center" gap={1} mb={2}>
                             <Ticket size={18} className="text-orange-500" />
@@ -219,6 +233,7 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                         )}
                     </Paper>
 
+                    {/* Formas de Pagamento */}
                     <Paper elevation={0} variant="outlined" sx={{ p: 2, borderRadius: 2, flex: 1 }}>
                         <Typography variant="subtitle2" fontWeight={700} mb={2}>Formas de Pagamento</Typography>
                         <Stack spacing={2}>
@@ -273,6 +288,7 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                         </Stack>
                     </Paper>
 
+                    {/* CPF na Nota */}
                     <Box sx={{ pt: 1 }}>
                         <Typography variant="caption" color="text.secondary" onClick={() => setDocCliente(prev => prev ? '' : ' ')} sx={{ cursor: 'pointer', textDecoration: 'underline' }}>
                             {docCliente === '' && 'Adicionar CPF/CNPJ na nota?'}
@@ -295,6 +311,7 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                     </Box>
                 </Stack>
 
+                {/* Resumo Lateral */}
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                     <Paper elevation={4} sx={{
                         p: 3,
@@ -308,7 +325,7 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                         borderColor: 'divider'
                     }}>
                         <Box>
-                            <Typography variant="overline" color="text.secondary" fontWeight={700} letterSpacing={1}>RESUMO DO PEDIDO</Typography>
+                            <Typography variant="overline" color="text.secondary" fontWeight={700} letterSpacing={1}>RESUMO FINANCEIRO</Typography>
                             <Box mt={2}>
                                 <Box display="flex" justifyContent="space-between" mb={1}>
                                     <Typography color="text.secondary">Subtotal</Typography>
@@ -322,7 +339,7 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                                 )}
                                 <Divider sx={{ my: 2 }} />
                                 <Box display="flex" justifyContent="space-between" alignItems="baseline">
-                                    <Typography variant="h6" fontWeight={700}>TOTAL A PAGAR</Typography>
+                                    <Typography variant="h6" fontWeight={700}>TOTAL</Typography>
                                     <Typography variant="h4" fontWeight={800} color="primary.main">R$ {totalComDesconto.toFixed(2)}</Typography>
                                 </Box>
                             </Box>
@@ -352,15 +369,15 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                         <Button
                             fullWidth
                             variant="contained"
-                            color={prontoParaFinalizar ? "success" : "inherit"}
+                            color={!caixaAberto ? "error" : (prontoParaFinalizar ? "success" : "inherit")}
                             size="large"
-                            disabled={!prontoParaFinalizar || loading}
+                            disabled={!prontoParaFinalizar || loading || !caixaAberto}
                             onClick={handleConcluir}
-                            startIcon={<Printer />}
+                            startIcon={!caixaAberto ? <Ban /> : <Printer />}
                             loading={loading}
                             sx={{ height: 60, fontSize: '1.1rem', boxShadow: prontoParaFinalizar ? 4 : 0 }}
                         >
-                            {prontoParaFinalizar ? 'FINALIZAR E IMPRIMIR' : 'AGUARDANDO PAGAMENTO'}
+                            {!caixaAberto ? 'CAIXA FECHADO' : (prontoParaFinalizar ? 'FINALIZAR E IMPRIMIR' : 'AGUARDANDO PAGAMENTO')}
                         </Button>
                     </Paper>
                 </Box>
@@ -373,10 +390,10 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
             >
                 <Box sx={{ textAlign: 'center', p: 2 }}>
                     <Typography variant="h6" gutterBottom fontWeight={600}>
-                        Pagamento Registrado com Sucesso!
+                        Venda Registrada no Caixa!
                     </Typography>
                     <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-                        A via do estabelecimento foi impressa. Deseja imprimir a <b>Via do Cliente</b>?
+                        A via do estabelecimento foi impressa e o saldo atualizado. <br />Deseja imprimir a <b>Via do Cliente</b>?
                     </Typography>
 
                     <Stack direction="row" spacing={2} justifyContent="center">
@@ -407,29 +424,32 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
     );
 };
 
+// ... Restante do código (ComandaContent, PedidoCard, PedidosPage) permanece igual ...
+// Apenas garanta que o ComandaContent chama a TelaPagamento corretamente.
+
 const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void }) => {
     const { user } = useUserStore();
     const { itens: cardapio } = useCardapioStore();
     const [view, setView] = useState<'details' | 'payment'>('details');
+    // ... restante dos states e lógica ...
     const [isAdding, setIsAdding] = useState(false);
     const [loadingAction, setLoadingAction] = useState(false);
     const [cancelType, setCancelType] = useState<'mesa' | 'item' | null>(null);
     const [itemToCancel, setItemToCancel] = useState<{ index: number, name: string } | null>(null);
     const [qtdToAdd, setQtdToAdd] = useState(1);
 
+    // ... handleAddItem e handleConfirmCancel iguais ...
     const handleAddItem = async (itemOverride?: any) => {
         if (!itemOverride && !isAdding) return;
         setLoadingAction(true);
         try {
             const produto = itemOverride;
             if (!produto) return;
-
-            // 1. Atualizar Banco
             const novoItem = { itemId: produto.id, nome: produto.nome, precoUnitario: produto.preco, quantidade: qtdToAdd };
             const novoTotal = pedido.total + (produto.preco * qtdToAdd);
             await updateDoc(doc(db as Firestore, 'pedidos', pedido.docId), { itens: [...pedido.itens, novoItem], total: novoTotal });
 
-            // 2. IMPRIMIR CUPOM DE ADIÇÃO (COZINHA/BAR)
+            // Impressão cozinha
             const txtImpressao = [
                 "--------------------------------",
                 "      ADICAO DE ITEM            ",
@@ -442,9 +462,7 @@ const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void 
                 "--------------------------------",
                 "\n\n"
             ].join("\n");
-
             imprimirRelatorio(txtImpressao);
-
             setQtdToAdd(1);
         } catch (error) {
             console.error(error);
@@ -577,26 +595,25 @@ function PedidosPage() {
     const [loading, setLoading] = useState(true);
     const [detailId, setDetailId] = useState<string | null>(null);
     const [novoOpen, setNovoOpen] = useState(false);
-
     const [verificandoCaixa, setVerificandoCaixa] = useState(false);
     const { user } = useUserStore();
+    const { checkCaixaStatus } = useCaixaStore(); // <--- VERIFICA NO LOAD
 
     useEffect(() => {
+        checkCaixaStatus(); // Garante que o store sabe se tem caixa aberto ao carregar a página
         const q = query(collection(db as Firestore, 'pedidos'), orderBy('createdAt', 'asc'));
         return onSnapshot(q, (snap) => {
             const data = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
             setPedidos(data); setLoading(false);
         });
-    }, []);
+    }, [checkCaixaStatus]);
 
     const pedidoAtivo = useMemo(() => pedidos.find(p => p.docId === detailId), [pedidos, detailId]);
     useEffect(() => { if (detailId && !pedidoAtivo) setDetailId(null); }, [pedidoAtivo, detailId]);
-
-    const mesasAtivas = pedidos.filter(p => p.status !== 'entregue').length;
+    const mesasAtivas = pedidos.filter(p => p.status !== 'entregue' && p.status !== 'cancelado').length;
 
     const handleAbrirNovaMesa = async () => {
         if (!user?.uid) return;
-
         setVerificandoCaixa(true);
         try {
             const caixa = await getCaixaAberto(user.uid);

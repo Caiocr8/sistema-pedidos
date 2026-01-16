@@ -12,10 +12,16 @@ import {
 import { collection, query, where, orderBy, onSnapshot, Firestore } from 'firebase/firestore';
 import { db } from '@/lib/api/firebase/config';
 import { useUserStore } from '@/store/user-store';
+import { useCaixaStore } from '@/store/caixa-store';
 import {
-    abrirCaixa, registrarMovimentacao, subscribeToHistorico,
-    getDadosRelatorio, fecharCaixaCompleto,
-    CaixaSessao, Movimentacao, RelatorioData
+    abrirCaixa,
+    registrarMovimentacaoManual,
+    subscribeToHistorico,
+    getDadosRelatorio,
+    fecharCaixa,
+    CaixaSessao,
+    Movimentacao,
+    RelatorioData
 } from '@/lib/services/caixa';
 import { gerarCupomTexto, imprimirRelatorio } from '@/lib/utils/print-service';
 
@@ -26,8 +32,6 @@ import Input from '@/components/forms/input';
 export const Route = createFileRoute('/_auth/painel/caixa')({
     component: CaixaPage,
 })
-
-// --- COMPONENTES AUXILIARES ---
 
 const StatCard = ({ title, value, icon: Icon, color, subvalue }: any) => (
     <Paper elevation={0} sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 3, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -55,6 +59,8 @@ const AbrirCaixaModal = ({ open, onClose, onConfirm, loading }: any) => {
                     Informe o valor em dinheiro presente na gaveta para iniciar o turno.
                 </Alert>
                 <Input
+                    id="abertura-valor" // ID Único
+                    name="valorInicial" // Nome para autofill/form
                     label="Valor Inicial (R$)"
                     type="number"
                     value={valor}
@@ -88,6 +94,8 @@ const MovimentacaoModal = ({ type, open, onClose, onConfirm, loading }: any) => 
                 </Alert>
                 <Stack spacing={3}>
                     <Input
+                        id="mov-valor"
+                        name="valorMovimentacao"
                         label="Valor (R$)"
                         type="number"
                         value={valor}
@@ -97,6 +105,8 @@ const MovimentacaoModal = ({ type, open, onClose, onConfirm, loading }: any) => 
                         InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }}
                     />
                     <Input
+                        id="mov-motivo"
+                        name="motivoMovimentacao"
                         label="Motivo / Descrição"
                         value={motivo}
                         onChange={(e) => setMotivo(e.target.value)}
@@ -115,7 +125,7 @@ const MovimentacaoModal = ({ type, open, onClose, onConfirm, loading }: any) => 
 };
 
 const FecharCaixaModal = ({ open, onClose, sessao, onConfirm, loading }: any) => {
-    const [step, setStep] = useState(1); // 1: Load, 2: Conferência
+    const [step, setStep] = useState(1);
     const [relatorio, setRelatorio] = useState<RelatorioData | null>(null);
     const [confDinheiro, setConfDinheiro] = useState('');
     const [confCartao, setConfCartao] = useState('');
@@ -139,7 +149,7 @@ const FecharCaixaModal = ({ open, onClose, sessao, onConfirm, loading }: any) =>
         const dinheiro = parseFloat(confDinheiro) || 0;
         const cartao = parseFloat(confCartao) || 0;
 
-        const dadosFinais = {
+        const dadosFinais: RelatorioData = {
             ...relatorio,
             fechamento: {
                 dinheiroContado: dinheiro,
@@ -165,7 +175,6 @@ const FecharCaixaModal = ({ open, onClose, sessao, onConfirm, loading }: any) =>
                     </Alert>
 
                     <Grid container spacing={3}>
-                        {/* Coluna Esquerda: Esperado */}
                         <Grid size={{ xs: 12, md: 6 }}>
                             <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover', height: '100%' }}>
                                 <Typography variant="subtitle2" fontWeight={700} gutterBottom color="primary">ESPERADO (SISTEMA)</Typography>
@@ -187,11 +196,12 @@ const FecharCaixaModal = ({ open, onClose, sessao, onConfirm, loading }: any) =>
                             </Paper>
                         </Grid>
 
-                        {/* Coluna Direita: Conferência */}
                         <Grid size={{ xs: 12, md: 6 }}>
                             <Typography variant="subtitle2" fontWeight={700} gutterBottom mb={2}>CONFERÊNCIA (REAL)</Typography>
                             <Stack spacing={2}>
                                 <Input
+                                    id="conf-dinheiro"
+                                    name="dinheiroContado"
                                     label="Dinheiro Contado"
                                     type="number"
                                     value={confDinheiro}
@@ -201,6 +211,8 @@ const FecharCaixaModal = ({ open, onClose, sessao, onConfirm, loading }: any) =>
                                     focused
                                 />
                                 <Input
+                                    id="conf-cartao"
+                                    name="cartaoContado"
                                     label="Total Maquineta (Cartão+Pix)"
                                     type="number"
                                     value={confCartao}
@@ -212,7 +224,6 @@ const FecharCaixaModal = ({ open, onClose, sessao, onConfirm, loading }: any) =>
                         </Grid>
                     </Grid>
 
-                    {/* Resumo da Diferença */}
                     <Box sx={{ mt: 3, p: 2, borderRadius: 2, bgcolor: Math.abs(difTotal) < 0.05 ? 'success.light' : difTotal > 0 ? 'info.light' : 'error.light', color: Math.abs(difTotal) < 0.05 ? 'success.dark' : difTotal > 0 ? 'info.dark' : 'error.dark' }}>
                         <Box display="flex" alignItems="center" gap={2}>
                             {Math.abs(difTotal) >= 0.05 && <AlertTriangle size={24} />}
@@ -228,6 +239,8 @@ const FecharCaixaModal = ({ open, onClose, sessao, onConfirm, loading }: any) =>
                     </Box>
 
                     <TextField
+                        id="fechamento-obs"
+                        name="observacoesFechamento"
                         label="Observações do Fechamento"
                         multiline
                         rows={2}
@@ -254,19 +267,19 @@ const FecharCaixaModal = ({ open, onClose, sessao, onConfirm, loading }: any) =>
 
 function CaixaPage() {
     const { user } = useUserStore();
+    const { setCaixaAberto, setCaixaFechado } = useCaixaStore();
+
     const [sessao, setSessao] = useState<CaixaSessao | null>(null);
     const [historico, setHistorico] = useState<CaixaSessao[]>([]);
     const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
 
-    // Estados dos Modais
     const [modalAbertura, setModalAbertura] = useState(false);
     const [modalSangria, setModalSangria] = useState(false);
     const [modalSuprimento, setModalSuprimento] = useState(false);
     const [modalFechamento, setModalFechamento] = useState(false);
 
-    // 1. Escuta a sessão ativa
     useEffect(() => {
         if (!user?.uid) return;
         const q = query(collection(db as Firestore, 'caixa_sessoes'), where('usuarioId', '==', user.uid), where('status', '==', 'aberto'));
@@ -281,13 +294,11 @@ function CaixaPage() {
         return unsubscribe;
     }, [user?.uid]);
 
-    // 2. Escuta histórico
     useEffect(() => {
-        const unsubscribe = subscribeToHistorico((data) => setHistorico(data));
+        const unsubscribe = subscribeToHistorico((data: CaixaSessao[]) => setHistorico(data));
         return unsubscribe;
     }, []);
 
-    // 3. Escuta movimentações da sessão atual
     useEffect(() => {
         if (!sessao?.id) { setMovimentacoes([]); return; }
         const q = query(collection(db as Firestore, 'caixa_movimentacoes'), where('sessaoId', '==', sessao.id), orderBy('data', 'desc'));
@@ -297,20 +308,25 @@ function CaixaPage() {
         return unsubscribe;
     }, [sessao?.id]);
 
-    // --- HANDLERS ---
-
     const handleAbrirCaixa = async (valor: number) => {
         if (!user) return;
         setActionLoading(true);
-        try { await abrirCaixa(user.uid, user.displayName || 'Usuário', valor); setModalAbertura(false); }
+        try {
+            const novoId = await abrirCaixa(user.uid, user.displayName || 'Usuário', valor);
+            setCaixaAberto(novoId);
+            setModalAbertura(false);
+        }
         catch (error) { console.error(error); alert("Erro ao abrir"); } finally { setActionLoading(false); }
     };
 
     const handleMovimentacao = async (valor: number, motivo: string, tipo: 'sangria' | 'suprimento') => {
         if (!sessao?.id || !user) return;
         setActionLoading(true);
-        try { await registrarMovimentacao(sessao.id, user.uid, tipo, valor, motivo, sessao.saldoAtual); if (tipo === 'sangria') setModalSangria(false); else setModalSuprimento(false); }
-        catch (error) { console.error(error); alert("Erro"); } finally { setActionLoading(false); }
+        try {
+            await registrarMovimentacaoManual(sessao.id, user.uid, tipo, valor, motivo);
+            if (tipo === 'sangria') setModalSangria(false); else setModalSuprimento(false);
+        }
+        catch (error) { console.error(error); alert("Erro ao registrar movimentação."); } finally { setActionLoading(false); }
     };
 
     const handleImprimirParcial = async () => {
@@ -327,35 +343,34 @@ function CaixaPage() {
         if (!sessao?.id || !dadosCompletos.fechamento) return;
         setActionLoading(true);
         try {
-            await fecharCaixaCompleto(
+            await fecharCaixa(
                 sessao.id,
-                dadosCompletos,
                 {
                     dinheiro: dadosCompletos.fechamento.dinheiroContado,
-                    cartaoPix: dadosCompletos.fechamento.cartaoPixContado,
+                    cartao: dadosCompletos.fechamento.cartaoPixContado,
+                    pix: 0,
                     obs: dadosCompletos.fechamento.observacoes
-                }
+                },
+                dadosCompletos
             );
 
-            // Imprime relatório final automaticamente
+            setCaixaFechado();
+
             const texto = gerarCupomTexto(dadosCompletos, 'FECHAMENTO', user?.displayName || 'Op');
             imprimirRelatorio(texto);
-
             setModalFechamento(false);
-        } catch (error) { console.error(error); alert("Erro ao fechar"); } finally { setActionLoading(false); }
+        } catch (error) { console.error(error); alert("Erro ao fechar caixa."); } finally { setActionLoading(false); }
     };
 
     if (loading) return <Box display="flex" justifyContent="center" mt={10}><CircularProgress /></Box>;
 
     return (
         <Box sx={{ p: { xs: 2, md: 4 }, pb: 10, maxWidth: 1200, mx: 'auto' }}>
-
             <Typography variant="h4" fontWeight={800} sx={{ fontFamily: 'Caveat, cursive', color: 'primary.main', mb: 3 }}>
                 Controle de Caixa
             </Typography>
 
             {!sessao ? (
-                // --- CAIXA FECHADO ---
                 <Paper sx={{ p: 6, mb: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', bgcolor: 'background.paper', border: '1px dashed', borderColor: 'divider', borderRadius: 4 }}>
                     <Box sx={{ bgcolor: 'action.hover', p: 3, borderRadius: '50%', mb: 2 }}>
                         <Wallet size={48} className="text-gray-400" />
@@ -369,7 +384,6 @@ function CaixaPage() {
                     </Button>
                 </Paper>
             ) : (
-                // --- CAIXA ABERTO ---
                 <Box mb={6}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                         <Stack direction="row" alignItems="center" gap={1}>
@@ -459,8 +473,10 @@ function CaixaPage() {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {historico.map((h) => {
+                                {historico.map((h: any) => {
                                     const isOpen = h.status === 'aberto';
+                                    const valorFinalDisplay = h.valorFinal !== undefined ? h.valorFinal : (h.resumoFechamento?.totalGeralContado);
+
                                     return (
                                         <TableRow key={h.id} hover selected={isOpen}>
                                             <TableCell>
@@ -475,8 +491,8 @@ function CaixaPage() {
                                             <TableCell>{h.usuarioNome}</TableCell>
                                             <TableCell align="right">R$ {h.valorInicial.toFixed(2)}</TableCell>
                                             <TableCell align="right">
-                                                {h.valorFinal !== undefined
-                                                    ? <Typography variant="body2" fontWeight={700} color="success.main">R$ {h.valorFinal.toFixed(2)}</Typography>
+                                                {valorFinalDisplay !== undefined
+                                                    ? <Typography variant="body2" fontWeight={700} color="success.main">R$ {Number(valorFinalDisplay).toFixed(2)}</Typography>
                                                     : <Typography variant="caption" color="text.secondary">--</Typography>
                                                 }
                                             </TableCell>
@@ -498,11 +514,10 @@ function CaixaPage() {
                 </Paper>
             </Box>
 
-            {/* Modais */}
             <AbrirCaixaModal open={modalAbertura} onClose={() => setModalAbertura(false)} onConfirm={handleAbrirCaixa} loading={actionLoading} />
             <MovimentacaoModal type="sangria" open={modalSangria} onClose={() => setModalSangria(false)} onConfirm={(v: number, m: string) => handleMovimentacao(v, m, 'sangria')} loading={actionLoading} />
             <MovimentacaoModal type="suprimento" open={modalSuprimento} onClose={() => setModalSuprimento(false)} onConfirm={(v: number, m: string) => handleMovimentacao(v, m, 'suprimento')} loading={actionLoading} />
             <FecharCaixaModal open={modalFechamento} onClose={() => setModalFechamento(false)} sessao={sessao} onConfirm={handleConfirmarFechamento} loading={actionLoading} />
         </Box>
     );
-} 
+}

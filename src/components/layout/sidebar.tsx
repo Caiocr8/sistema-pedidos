@@ -18,7 +18,7 @@ interface SidebarProps {
     width?: number;
 }
 
-export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarProps) {
+export function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarProps) {
     const theme = useTheme();
     const router = useRouter();
     const { user, logout } = useUserStore();
@@ -225,4 +225,6 @@ export default function Sidebar({ mobileOpen, onClose, width = 280 }: SidebarPro
             </Drawer>
         </Box>
     );
-} 
+}
+
+export default Sidebar;
