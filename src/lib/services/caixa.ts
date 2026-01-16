@@ -1,6 +1,6 @@
 import {
     collection, doc, runTransaction, serverTimestamp,
-    query, where, limit, getDocs, onSnapshot, orderBy
+    query, where, limit, getDocs, onSnapshot, orderBy, Timestamp
 } from 'firebase/firestore';
 import { db } from '@/lib/api/firebase/config';
 
@@ -10,8 +10,8 @@ export interface CaixaSessao {
     id?: string;
     usuarioId: string;
     usuarioNome: string;
-    dataAbertura: any;
-    dataFechamento?: any;
+    dataAbertura: Timestamp;
+    dataFechamento?: Timestamp;
     valorInicial: number;
     valorFinal?: number; // Adicionado para exibição no histórico
     saldoAtual: number;
@@ -33,6 +33,12 @@ export interface Movimentacao {
     usuarioId: string;
 }
 
+export interface ItemResumo {
+    nome: string;
+    quantidade: number;
+    total: number;
+}
+
 export interface RelatorioData {
     sessao: CaixaSessao;
     vendas: {
@@ -52,6 +58,7 @@ export interface RelatorioData {
         cartaoPix: number;
         totalGeral: number;
     };
+    itensVendidos: ItemResumo[];
     // ADICIONADO: Campo opcional para transitar dados no frontend antes de salvar
     fechamento?: {
         dinheiroContado: number;
@@ -80,39 +87,16 @@ export const abrirCaixa = async (usuarioId: string, usuarioNome: string, valorIn
     try {
         const sessaoRef = doc(collection(db, 'caixa_sessoes'));
         const movRef = doc(collection(db, 'caixa_movimentacoes'));
-
         await runTransaction(db, async (transaction) => {
-            const q = query(collection(db, 'caixa_sessoes'),
-                where('usuarioId', '==', usuarioId),
-                where('status', '==', 'aberto'));
+            const q = query(collection(db, 'caixa_sessoes'), where('usuarioId', '==', usuarioId), where('status', '==', 'aberto'));
             const check = await getDocs(q);
-            if (!check.empty) throw new Error("Já existe um caixa aberto para este usuário.");
-
-            transaction.set(sessaoRef, {
-                usuarioId,
-                usuarioNome,
-                dataAbertura: serverTimestamp(),
-                valorInicial,
-                saldoAtual: valorInicial,
-                status: 'aberto'
-            });
-
-            transaction.set(movRef, {
-                sessaoId: sessaoRef.id,
-                tipo: 'abertura',
-                valor: valorInicial,
-                descricao: 'Abertura de Caixa (Fundo)',
-                data: serverTimestamp(),
-                usuarioId
-            });
+            if (!check.empty) throw new Error("Já existe caixa aberto.");
+            transaction.set(sessaoRef, { usuarioId, usuarioNome, dataAbertura: serverTimestamp(), valorInicial, saldoAtual: valorInicial, status: 'aberto' });
+            transaction.set(movRef, { sessaoId: sessaoRef.id, tipo: 'abertura', valor: valorInicial, descricao: 'Abertura', data: serverTimestamp(), usuarioId });
         });
-
         return sessaoRef.id;
-    } catch (error) {
-        console.error("Erro ao abrir caixa:", error);
-        throw error;
-    }
-};
+    } catch (error) { throw error; }
+}
 
 export const processarVenda = async (
     sessaoId: string,
@@ -231,6 +215,7 @@ export const subscribeToHistorico = (callback: (data: CaixaSessao[]) => void) =>
 };
 
 export const getDadosRelatorio = async (sessao: CaixaSessao): Promise<RelatorioData> => {
+    // 1. Busca Movimentações Financeiras
     const movQuery = query(
         collection(db, 'caixa_movimentacoes'),
         where('sessaoId', '==', sessao.id)
@@ -245,7 +230,6 @@ export const getDadosRelatorio = async (sessao: CaixaSessao): Promise<RelatorioD
 
     movs.forEach(m => {
         const valor = Number(m.valor || 0);
-
         if (m.tipo === 'venda') {
             vendas.total += valor;
             switch (m.formaPagamento) {
@@ -266,6 +250,46 @@ export const getDadosRelatorio = async (sessao: CaixaSessao): Promise<RelatorioD
     const dinheiroEsperado = (sessao.valorInicial || 0) + vendas.dinheiro + totalSuprimentos - totalSaidas;
     const cartaoPixEsperado = vendas.credito + vendas.debito + vendas.pix + vendas.outros;
 
+    // =========================================================================
+    // 2. BUSCA DETALHADA DE ITENS VENDIDOS (QUERY NOS PEDIDOS)
+    // =========================================================================
+
+    // Define o intervalo de tempo da sessão
+    const dataInicio = sessao.dataAbertura;
+    const dataFim = sessao.dataFechamento || Timestamp.now();
+
+    // Busca pedidos entregues neste intervalo
+    const pedidosQuery = query(
+        collection(db, 'pedidos'),
+        where('status', '==', 'entregue'),
+        where('createdAt', '>=', dataInicio),
+        where('createdAt', '<=', dataFim)
+    );
+
+    const pedidosSnap = await getDocs(pedidosQuery);
+    const mapaItens: Record<string, ItemResumo> = {};
+
+    pedidosSnap.forEach(doc => {
+        const pedido = doc.data();
+        if (pedido.itens && Array.isArray(pedido.itens)) {
+            pedido.itens.forEach((item: any) => {
+                const nome = item.nome || 'Item desconhecido';
+                const qtd = Number(item.quantidade || 1);
+                const preco = Number(item.precoUnitario || 0);
+
+                if (!mapaItens[nome]) {
+                    mapaItens[nome] = { nome, quantidade: 0, total: 0 };
+                }
+
+                mapaItens[nome].quantidade += qtd;
+                mapaItens[nome].total += (preco * qtd);
+            });
+        }
+    });
+
+    // Converte o mapa em array ordenado por quantidade
+    const itensVendidos = Object.values(mapaItens).sort((a, b) => b.quantidade - a.quantidade);
+
     return {
         sessao,
         vendas,
@@ -274,7 +298,8 @@ export const getDadosRelatorio = async (sessao: CaixaSessao): Promise<RelatorioD
             dinheiro: dinheiroEsperado,
             cartaoPix: cartaoPixEsperado,
             totalGeral: dinheiroEsperado + cartaoPixEsperado
-        }
+        },
+        itensVendidos // <--- Retorna a lista detalhada
     };
 };
 
