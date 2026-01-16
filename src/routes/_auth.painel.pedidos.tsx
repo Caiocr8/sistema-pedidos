@@ -16,11 +16,11 @@ import { collection, onSnapshot, query, orderBy, doc, updateDoc, Firestore } fro
 import { db } from '@/lib/api/firebase/config';
 import { useCardapioStore } from '@/store/cardapioStore';
 import { finalizarPedido, cancelarPedido, cancelarItemIndividual } from '@/lib/services/pedidos';
-import { gerarViasRecibo, imprimirRelatorio } from '@/lib/utils/print-service'; // Importação Atualizada
+import { gerarViasRecibo, imprimirRelatorio } from '@/lib/utils/print-service';
 import { useUserStore } from '@/store/user-store';
 import { getCaixaAberto } from '@/lib/services/caixa';
 
-import StyledModal from '@/components/ui/modal'; // Seu Modal
+import StyledModal from '@/components/ui/modal';
 import Button from '@/components/ui/button';
 import NovoPedidoModal from '@/components/layout/pedidos/modal/novo-pedido';
 import CancelarModal from '@/components/layout/pedidos/modal/cancelar-pedido';
@@ -77,7 +77,7 @@ const OrderTimer = ({ createdAt, status, large = false }: { createdAt: any, stat
 
 // --- TELA DE PAGAMENTO OTIMIZADA ---
 const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVoltar: () => void, onFinalizar: () => void }) => {
-    // Pagamentos
+    const { user } = useUserStore();
     const [valores, setValores] = useState<Record<string, number>>({
         'Dinheiro': 0, 'Pix': 0, 'Cartão Crédito': 0, 'Cartão Débito': 0, 'Vale Refeição': 0
     });
@@ -89,7 +89,6 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
     const [tipoDoc, setTipoDoc] = useState('CPF');
     const [loading, setLoading] = useState(false);
 
-    // --- NOVO: Estado para controle de impressão ---
     const [modalClienteOpen, setModalClienteOpen] = useState(false);
     const [textoViaCliente, setTextoViaCliente] = useState('');
 
@@ -126,18 +125,26 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
     };
 
     const handleConcluir = async () => {
+        if (!user?.uid) return alert("Erro: Usuário não identificado.");
+
         setLoading(true);
         try {
-            await finalizarPedido(pedido, valores, {
-                troco,
-                desconto: descontoCalculado > 0 ? {
-                    tipo: tipoDesconto,
-                    valorInput: parseFloat(valorDescontoInput) || 0,
-                    valorCalculado: descontoCalculado
-                } : undefined,
-                totalFinal: totalComDesconto,
-                parcelas: valores['Cartão Crédito'] > 0 ? parcelas : 1
-            });
+            await finalizarPedido(
+                pedido.docId,
+                valores,
+                {
+                    troco,
+                    desconto: descontoCalculado > 0 ? {
+                        tipo: tipoDesconto,
+                        valorInput: parseFloat(valorDescontoInput) || 0,
+                        valorCalculado: descontoCalculado
+                    } : undefined,
+                    totalFinal: totalComDesconto,
+                    parcelas: valores['Cartão Crédito'] > 0 ? parcelas : 1
+                },
+                user.uid,
+                user.displayName || 'Operador'
+            );
 
             // Geração das Vias Separadas
             const vias = gerarViasRecibo(
@@ -150,18 +157,17 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                 valores['Cartão Crédito'] > 0 ? parcelas : 1
             );
 
-            // 1. Imprime Via do Estabelecimento IMEDIATAMENTE
+            // Imprime via do estabelecimento automaticamente
             imprimirRelatorio(vias.viaEstabelecimento);
 
-            // 2. Prepara e abre modal para Via do Cliente
+            // Abre modal para via do cliente
             setTextoViaCliente(vias.viaCliente);
             setModalClienteOpen(true);
             setLoading(false);
 
-            // Nota: Não chamamos onFinalizar() aqui, será chamado no fechar do modal
         } catch (error) {
             console.error(error);
-            alert("Erro ao finalizar pedido.");
+            alert("Erro ao finalizar pedido. Verifique se o caixa está aberto.");
             setLoading(false);
         }
     };
@@ -174,9 +180,7 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
             </Box>
 
             <Box sx={{ display: 'flex', gap: 3, height: '100%', flexDirection: { xs: 'column', md: 'row' } }}>
-                {/* COLUNA ESQUERDA: Inputs e Configurações */}
                 <Stack spacing={2} sx={{ flex: 1.5, overflowY: 'auto', pr: 1 }}>
-                    {/* DESCONTO */}
                     <Paper elevation={0} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                         <Box display="flex" alignItems="center" gap={1} mb={2}>
                             <Ticket size={18} className="text-orange-500" />
@@ -215,16 +219,15 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                         )}
                     </Paper>
 
-                    {/* MÉTODOS DE PAGAMENTO */}
                     <Paper elevation={0} variant="outlined" sx={{ p: 2, borderRadius: 2, flex: 1 }}>
                         <Typography variant="subtitle2" fontWeight={700} mb={2}>Formas de Pagamento</Typography>
                         <Stack spacing={2}>
                             {Object.keys(valores).map((metodo) => {
                                 const isDinheiro = metodo === 'Dinheiro';
                                 const isCredito = metodo === 'Cartão Crédito';
+                                const isFilled = valores[metodo] > 0;
                                 const pagoOutros = Object.entries(valores).filter(([k]) => k !== metodo).reduce((a, b) => a + b[1], 0);
                                 const falta = Math.max(0, totalComDesconto - pagoOutros);
-                                const isFilled = valores[metodo] > 0;
 
                                 return (
                                     <Box key={metodo} display="flex" alignItems="center" gap={2}>
@@ -242,7 +245,6 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                                                     value={parcelas}
                                                     onChange={(e) => setParcelas(Number(e.target.value))}
                                                     displayEmpty
-                                                    inputProps={{ 'aria-label': 'Parcelas' }}
                                                     sx={{ fontSize: '0.875rem' }}
                                                 >
                                                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((p) => (
@@ -271,7 +273,6 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                         </Stack>
                     </Paper>
 
-                    {/* DADOS DA NOTA */}
                     <Box sx={{ pt: 1 }}>
                         <Typography variant="caption" color="text.secondary" onClick={() => setDocCliente(prev => prev ? '' : ' ')} sx={{ cursor: 'pointer', textDecoration: 'underline' }}>
                             {docCliente === '' && 'Adicionar CPF/CNPJ na nota?'}
@@ -294,7 +295,6 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                     </Box>
                 </Stack>
 
-                {/* COLUNA DIREITA: Resumo Financeiro */}
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                     <Paper elevation={4} sx={{
                         p: 3,
@@ -366,7 +366,6 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
                 </Box>
             </Box>
 
-            {/* --- MODAL DE CONFIRMAÇÃO DA VIA DO CLIENTE --- */}
             <StyledModal
                 open={modalClienteOpen}
                 onClose={() => { setModalClienteOpen(false); onFinalizar(); }}
@@ -409,6 +408,7 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
 };
 
 const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void }) => {
+    const { user } = useUserStore();
     const { itens: cardapio } = useCardapioStore();
     const [view, setView] = useState<'details' | 'payment'>('details');
     const [isAdding, setIsAdding] = useState(false);
@@ -423,9 +423,28 @@ const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void 
         try {
             const produto = itemOverride;
             if (!produto) return;
+
+            // 1. Atualizar Banco
             const novoItem = { itemId: produto.id, nome: produto.nome, precoUnitario: produto.preco, quantidade: qtdToAdd };
             const novoTotal = pedido.total + (produto.preco * qtdToAdd);
             await updateDoc(doc(db as Firestore, 'pedidos', pedido.docId), { itens: [...pedido.itens, novoItem], total: novoTotal });
+
+            // 2. IMPRIMIR CUPOM DE ADIÇÃO (COZINHA/BAR)
+            const txtImpressao = [
+                "--------------------------------",
+                "      ADICAO DE ITEM            ",
+                "--------------------------------",
+                `MESA: ${pedido.mesa}`,
+                `DATA: ${new Date().toLocaleTimeString()}`,
+                `OPER: ${user?.displayName || 'Garçom'}`,
+                "--------------------------------",
+                `+ ${qtdToAdd}x  ${produto.nome}`,
+                "--------------------------------",
+                "\n\n"
+            ].join("\n");
+
+            imprimirRelatorio(txtImpressao);
+
             setQtdToAdd(1);
         } catch (error) {
             console.error(error);
@@ -436,12 +455,13 @@ const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void 
     };
 
     const handleConfirmCancel = async (motivo: string) => {
+        if (!user?.uid) return alert("Erro: Usuário não autenticado");
         setLoadingAction(true);
         try {
             if (cancelType === 'item' && itemToCancel) {
                 await cancelarItemIndividual(pedido.docId, pedido, itemToCancel.index, motivo);
             } else if (cancelType === 'mesa') {
-                await cancelarPedido(pedido, motivo);
+                await cancelarPedido(pedido.docId, motivo, user.uid);
                 onClose();
             }
             setCancelType(null); setItemToCancel(null);

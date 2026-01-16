@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import {
     Wallet, TrendingUp, TrendingDown, Lock, Unlock,
-    ArrowRightLeft, History, DollarSign, Printer, AlertTriangle, Calendar
+    ArrowRightLeft, DollarSign, Printer, AlertTriangle, Calendar
 } from 'lucide-react';
 import { collection, query, where, orderBy, onSnapshot, Firestore } from 'firebase/firestore';
 import { db } from '@/lib/api/firebase/config';

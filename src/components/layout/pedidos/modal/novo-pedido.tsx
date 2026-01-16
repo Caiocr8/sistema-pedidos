@@ -3,11 +3,13 @@ import {
     Typography, Box, Paper, List, ListItem, ListItemText, Stack, IconButton,
     CircularProgress, Alert, Autocomplete, TextField, InputAdornment
 } from '@mui/material';
-import { PlusCircle, MinusCircle, ShoppingCart, Hash, AlertTriangle, CheckCircle, Search } from 'lucide-react';
+import { PlusCircle, MinusCircle, ShoppingCart, Hash, AlertTriangle, Search } from 'lucide-react';
 import {
     addDoc, collection, serverTimestamp, Firestore, query, where, getDocs, updateDoc, doc
 } from 'firebase/firestore';
 import { useCardapioStore, CardapioItem } from '@/store/cardapioStore';
+import { useUserStore } from '@/store/user-store'; // Importando store de usuário
+import { imprimirRelatorio } from '@/lib/utils/print-service'; // Importando serviço de impressão
 import Input from '@/components/forms/input';
 import StyledButton from '@/components/ui/button';
 import { db } from '@/lib/api/firebase/config';
@@ -15,6 +17,7 @@ import { db } from '@/lib/api/firebase/config';
 interface ItemPedido extends CardapioItem { quantidade: number; }
 
 export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
+    const { user } = useUserStore(); // Pegando o usuário logado (Operador)
     const { itens: cardapioItens, loading: loadingCardapio, error: errorCardapio, dbReady, checkDbStatusAndInit } = useCardapioStore();
     const [pedidoAtual, setPedidoAtual] = useState<ItemPedido[]>([]);
     const [numeroMesa, setNumeroMesa] = useState('');
@@ -27,6 +30,31 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
     const [confirmandoAdicao, setConfirmandoAdicao] = useState(false);
 
     useEffect(() => { checkDbStatusAndInit(); }, [checkDbStatusAndInit]);
+
+    // --- Lógica de Impressão ---
+    const imprimirComprovantePedido = (mesa: string, itens: ItemPedido[], tipo: 'ABERTURA' | 'ADICAO') => {
+        const dataHora = new Date().toLocaleString('pt-BR');
+        const operador = user?.displayName || 'Caixa';
+
+        let texto = "--------------------------------\n";
+        texto += `      PEDIDO - ${tipo}      \n`;
+        texto += "--------------------------------\n";
+        texto += `MESA: ${mesa}\n`;
+        texto += `DATA: ${dataHora}\n`;
+        texto += `OPERADOR: ${operador}\n`;
+        texto += "--------------------------------\n";
+        texto += "QTD  ITEM\n";
+
+        itens.forEach(item => {
+            texto += `${item.quantidade}x   ${item.nome}\n`;
+        });
+
+        texto += "--------------------------------\n";
+        texto += "\n\n"; // Espaço para corte
+
+        imprimirRelatorio(texto);
+    };
+    // ---------------------------
 
     const cardapioAgrupado = useMemo(() => {
         const termo = busca.toLowerCase();
@@ -115,7 +143,12 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
             total: totalPedido,
             status: 'pendente',
             createdAt: serverTimestamp(),
+            createdBy: user?.uid, // Registra quem criou
         });
+
+        // IMPRIME APÓS SALVAR
+        imprimirComprovantePedido(numeroMesa, pedidoAtual, 'ABERTURA');
+
         if (onClose) onClose();
     };
 
@@ -135,6 +168,9 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
                 total: novoTotal,
             });
 
+            // IMPRIME APÓS ATUALIZAR
+            imprimirComprovantePedido(numeroMesa, pedidoAtual, 'ADICAO');
+
             if (onClose) onClose();
         } catch (e: any) {
             alert("Erro ao atualizar mesa: " + e.message);
@@ -147,7 +183,7 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
-            {/* --- BUSCA --- */}
+            {/* BUSCA */}
             <Paper elevation={0} sx={{ p: 0, bgcolor: 'transparent', flexShrink: 0 }}>
                 <Autocomplete
                     options={opcoesAutocomplete}
@@ -168,7 +204,7 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
                             placeholder="Nome ou categoria..."
                             variant="outlined"
                             fullWidth
-                            size="small" // Deixei um pouco mais compacto
+                            size="small"
                             InputProps={{
                                 ...params.InputProps,
                                 startAdornment: (
@@ -194,20 +230,11 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
                 />
             </Paper>
 
-            {/* --- ÁREA DE CONTEÚDO (DIVISÃO) --- */}
-            {/* Adicionei alignItems: 'flex-start' para o direito não esticar se não precisar */}
+            {/* ÁREA DE CONTEÚDO */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column-reverse', md: 'row' }, gap: 3, flex: 1, minHeight: 0, alignItems: 'flex-start' }}>
 
-                {/* Lado Esquerdo: Lista Cardápio */}
-                {/* Voltei com o maxHeight relativo para garantir o scroll interno e não esticar o modal infinito */}
-                <Box sx={{
-                    flex: 1.5,
-                    height: '100%',
-                    maxHeight: '60vh',
-                    overflowY: 'auto',
-                    pr: 1,
-                    opacity: confirmandoAdicao ? 0.3 : 1
-                }}>
+                {/* LISTA ESQUERDA */}
+                <Box sx={{ flex: 1.5, height: '100%', maxHeight: '60vh', overflowY: 'auto', pr: 1, opacity: confirmandoAdicao ? 0.3 : 1 }}>
                     {Object.keys(cardapioAgrupado).length === 0 ? (
                         <Box textAlign="center" mt={4} color="text.secondary">
                             <Typography variant="body2">Nenhum item encontrado.</Typography>
@@ -232,33 +259,16 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
                     )}
                 </Box>
 
-                {/* Lado Direito: Resumo */}
-                {/* Removi height: 100% do Paper e coloquei maxHeight para ele scrollar se o pedido for gigante */}
+                {/* RESUMO DIREITA */}
                 <Box sx={{ flex: 1, width: '100%' }}>
-                    <Paper elevation={4} sx={{
-                        p: 2,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        bgcolor: 'background.default',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        height: 'auto',        // Ajusta ao conteúdo
-                        maxHeight: '65vh',     // Mas tem um limite para não sair da tela
-                    }}>
+                    <Paper elevation={4} sx={{ p: 2, display: 'flex', flexDirection: 'column', bgcolor: 'background.default', position: 'relative', overflow: 'hidden', height: 'auto', maxHeight: '65vh' }}>
 
                         {confirmandoAdicao && (
-                            <Box sx={{
-                                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                                bgcolor: 'rgba(255,255,255,0.95)', zIndex: 10, p: 2,
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center'
-                            }}>
+                            <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, bgcolor: 'rgba(255,255,255,0.95)', zIndex: 10, p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
                                 <AlertTriangle size={40} color="#ed6c02" style={{ marginBottom: 8 }} />
-                                <Typography variant="h6" fontWeight={800} color="warning.main">
-                                    Mesa {numeroMesa} Ocupada
-                                </Typography>
+                                <Typography variant="h6" fontWeight={800} color="warning.main">Mesa {numeroMesa} Ocupada</Typography>
                                 <Typography variant="caption" color="text.secondary" mb={2}>
-                                    Já existe conta: <strong>R$ {mesaExistente?.total?.toFixed(2)}</strong>.
-                                    Juntar pedido?
+                                    Já existe conta: <strong>R$ {mesaExistente?.total?.toFixed(2)}</strong>. Juntar pedido?
                                 </Typography>
                                 <Stack spacing={1} width="100%">
                                     <StyledButton variant="contained" color="warning" size="small" fullWidth onClick={adicionarAMesaExistente} loading={saving}>Confirmar</StyledButton>
@@ -284,7 +294,6 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
                             <ShoppingCart size={12} style={{ marginRight: 4, marginBottom: -2 }} /> ITENS ({pedidoAtual.length})
                         </Typography>
 
-                        {/* Lista de itens scrollável dentro do resumo */}
                         <Box sx={{ flexGrow: 1, overflowY: 'auto', mb: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', minHeight: '100px' }}>
                             <List dense>
                                 {pedidoAtual.map(item => (
@@ -310,7 +319,7 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
                                 <Typography variant="h5" fontWeight={800} color="primary.main">R$ {totalPedido.toFixed(2)}</Typography>
                             </Box>
                             <StyledButton variant="contained" color="success" fullWidth size="large" onClick={handlePreSubmit} loading={saving} disabled={saving || pedidoAtual.length === 0 || !numeroMesa}>
-                                Confirmar
+                                Confirmar e Imprimir
                             </StyledButton>
                         </Box>
                     </Paper>
