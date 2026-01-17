@@ -424,23 +424,30 @@ const TelaPagamento = ({ pedido, onVoltar, onFinalizar }: { pedido: any, onVolta
     );
 };
 
-// ... Restante do código (ComandaContent, PedidoCard, PedidosPage) permanece igual ...
-// Apenas garanta que o ComandaContent chama a TelaPagamento corretamente.
-
 const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void }) => {
     const { user } = useUserStore();
     const { itens: cardapio } = useCardapioStore();
     const [view, setView] = useState<'details' | 'payment'>('details');
-    // ... restante dos states e lógica ...
+
     const [isAdding, setIsAdding] = useState(false);
     const [loadingAction, setLoadingAction] = useState(false);
     const [cancelType, setCancelType] = useState<'mesa' | 'item' | null>(null);
     const [itemToCancel, setItemToCancel] = useState<{ index: number, name: string } | null>(null);
     const [qtdToAdd, setQtdToAdd] = useState(1);
 
-    // ... handleAddItem e handleConfirmCancel iguais ...
+    const itensDisponiveis = useMemo(() => {
+        return cardapio.filter(item => item.disponivel === true);
+    }, [cardapio]);
+
     const handleAddItem = async (itemOverride?: any) => {
         if (!itemOverride && !isAdding) return;
+
+        // Verificação extra de segurança
+        if (!itemOverride.disponivel) {
+            alert("Este item está indisponível no momento.");
+            return;
+        }
+
         setLoadingAction(true);
         try {
             const produto = itemOverride;
@@ -464,6 +471,7 @@ const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void 
             ].join("\n");
             imprimirRelatorio(txtImpressao);
             setQtdToAdd(1);
+            // setIsAdding(false); // Opcional: fechar após adicionar ou manter aberto para múltiplos itens
         } catch (error) {
             console.error(error);
             alert("Erro ao adicionar.");
@@ -496,6 +504,7 @@ const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void 
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: { md: '700px' } }}>
+            {/* ... (Cabeçalho da Mesa mantido igual) ... */}
             <Paper elevation={0} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, p: 2, bgcolor: 'primary.main', color: 'primary.contrastText', borderRadius: 2 }}>
                 <Stack direction="row" gap={2} alignItems="center">
                     <Box sx={{ bgcolor: 'white', color: 'primary.main', width: 56, height: 56, borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '1.8rem' }}>{pedido.mesa}</Box>
@@ -529,7 +538,8 @@ const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void 
                         <TextField label="Qtd" type="number" size="small" value={qtdToAdd} onChange={(e) => setQtdToAdd(Number(e.target.value))} inputProps={{ min: 1 }} sx={{ width: 70 }} />
                         <Autocomplete
                             fullWidth size="small"
-                            options={cardapio.filter(i => i.disponivel)}
+                            // CORREÇÃO: Usar a lista filtrada 'itensDisponiveis'
+                            options={itensDisponiveis}
                             getOptionLabel={(option) => option.nome}
                             value={null}
                             onChange={(_, newValue) => { if (newValue) handleAddItem(newValue); }}
@@ -545,7 +555,7 @@ const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void 
                                     </Box>
                                 </li>
                             )}
-                            noOptionsText="Nenhum produto encontrado"
+                            noOptionsText="Nenhum produto disponível encontrado"
                         />
                         <IconButton onClick={() => setIsAdding(false)}><X /></IconButton>
                     </Paper>
@@ -568,6 +578,7 @@ const ComandaContent = ({ pedido, onClose }: { pedido: any, onClose: () => void 
         </Box>
     );
 };
+
 
 const PedidoCard = React.memo(({ pedido, onOpenDetails }: any) => {
     const theme = useTheme();
