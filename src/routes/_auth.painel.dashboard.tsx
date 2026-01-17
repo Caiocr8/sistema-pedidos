@@ -80,15 +80,34 @@ function DashboardPage() {
 
         // QUERIES
         const qActive = query(collection(db, 'pedidos'), orderBy('createdAt', 'asc'));
-        const qFinishedToday = query(collection(db, 'pedidos_finalizados'), where('finishedAt', '>=', todayTs));
-        const qFinishedYesterday = query(collection(db, 'pedidos_finalizados'), where('finishedAt', '>=', yesterdayTs), where('finishedAt', '<', todayTs));
+        // Agora buscamos na coleção 'pedidos' com status entregue para estatísticas do dia
+        const qFinishedToday = query(
+            collection(db, 'pedidos'),
+            where('status', '==', 'entregue'),
+            where('createdAt', '>=', todayTs)
+        );
+        const qFinishedYesterday = query(
+            collection(db, 'pedidos'),
+            where('status', '==', 'entregue'),
+            where('createdAt', '>=', yesterdayTs),
+            where('createdAt', '<', todayTs)
+        );
+
+        // Cancelados (podem estar em coleção separada ou na mesma, ajustado para buscar na mesma se for sua arquitetura, ou mantendo a separada se você usa trigger)
+        // Assumindo que cancelados ficam na coleção 'pedidos' com status 'cancelado' ou em 'pedidos_cancelados' se você move. 
+        // Vou manter a lógica original de 'pedidos_cancelados' mas se não tiver dados lá, considere mudar.
         const qCancelledToday = query(collection(db, 'pedidos_cancelados'), where('cancelledAt', '>=', todayTs));
 
-        // 1. Monitorar Pedidos Ativos
+        // 1. Monitorar Pedidos Ativos (CORREÇÃO AQUI)
         const unsubActive = onSnapshot(qActive, (snap) => {
             const longOrders = snap.docs
                 .map(d => ({ id: d.id, ...d.data() } as OrderData))
                 .filter(order => {
+                    // FILTRO CRÍTICO: Ignorar pedidos finalizados ou cancelados
+                    if (order.status === 'entregue' || order.status === 'cancelado' || order.status === 'concluido') {
+                        return false;
+                    }
+
                     const minutes = getMinutesAgo(order.createdAt);
                     return minutes >= 20;
                 });
@@ -121,24 +140,20 @@ function DashboardPage() {
                     totalVendas += data.total || 0;
 
                     // --- PROCESSAMENTO DE PAGAMENTOS (NOVO) ---
-                    const pags = data.pagamentos || {};
-                    // Se tiver o objeto novo detalhado
+                    const pags = data.pagamento?.pagamentos || {};
+
                     if (Object.keys(pags).length > 0) {
                         Object.entries(pags).forEach(([metodo, valor]) => {
                             const val = Number(valor);
                             if (metodo.includes('Pix')) paymentsMap['Pix'] += val;
                             else if (metodo.includes('Dinheiro')) paymentsMap['Dinheiro'] += val;
-                            else if (metodo.includes('Cartão')) paymentsMap['Cartão'] += val;
+                            else if (metodo.includes('Cartão') || metodo.includes('Crédito') || metodo.includes('Débito')) paymentsMap['Cartão'] += val;
                             else if (metodo.includes('Vale')) paymentsMap['Vale'] += val;
                             else paymentsMap['Outros'] = (paymentsMap['Outros'] || 0) + val;
                         });
                     } else {
-                        // Fallback para legado (campo metodoPagamento único)
-                        let metodoAntigo = (data.metodoPagamento || 'Outros');
-                        if (metodoAntigo.includes('Pix')) paymentsMap['Pix'] += data.total;
-                        else if (metodoAntigo.includes('Dinheiro')) paymentsMap['Dinheiro'] += data.total;
-                        else if (metodoAntigo.includes('Cartão')) paymentsMap['Cartão'] += data.total;
-                        else paymentsMap['Outros'] = (paymentsMap['Outros'] || 0) + data.total;
+                        // Fallback
+                        paymentsMap['Cartão'] += data.total;
                     }
 
                     // Agregação de Produtos
@@ -213,13 +228,12 @@ function DashboardPage() {
                     />
                 </Box>
 
-
-
                 <MetricCard
                     title="Volume Total"
                     value={totalPedidosDia}
                     badge="Mesas hoje" icon={ShoppingBag} iconColor="#C68642" bgColor="primary.light" valueColor="primary.main" badgeColor="primary"
                 />
+
                 <Box onClick={() => setModalOpen('cancelados')} sx={{ cursor: 'pointer' }}>
                     <MetricCard
                         title="Cancelados Hoje"
