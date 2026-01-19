@@ -12,7 +12,7 @@ interface CancelamentoDisplay {
     tipo: 'mesa' | 'item';
     mesa: string;
     total: number;
-    motivo: string;
+    motivo?: string;
     data: Date;
     itensDetalhados: { nome: string; qtd: number }[]; // Lista para exibir
 }
@@ -39,7 +39,7 @@ export default function CanceladosModalContent() {
                         tipo: 'mesa',
                         mesa: d.mesa,
                         total: d.total || 0,
-                        motivo: d.motivoCancelamento || 'Sem motivo',
+                        motivo: d.motivo,
                         data: d.cancelledAt?.toDate ? d.cancelledAt.toDate() : new Date(),
                         itensDetalhados: d.itens?.map((i: any) => ({ nome: i.nome, qtd: i.quantidade })) || []
                     };
@@ -53,7 +53,7 @@ export default function CanceladosModalContent() {
                         tipo: 'item',
                         mesa: d.mesa,
                         total: (item.precoUnitario * item.quantidade) || 0,
-                        motivo: d.motivo || 'Sem motivo',
+                        motivo: d.motivo,
                         data: d.canceladoEm?.toDate ? d.canceladoEm.toDate() : new Date(),
                         itensDetalhados: [{ nome: item.nome, qtd: item.quantidade }]
                     };
@@ -133,16 +133,23 @@ export default function CanceladosModalContent() {
                             <Typography variant="caption" fontWeight={700} color="text.secondary" mb={0.5} display="block">
                                 ITENS CANCELADOS:
                             </Typography>
-                            <Stack direction="row" flexWrap="wrap" gap={1}>
-                                {cancelamento.itensDetalhados.map((item, idx) => (
-                                    <Chip
-                                        key={idx}
-                                        label={`${item.qtd}x ${item.nome}`}
-                                        size="small"
-                                        sx={{ bgcolor: 'action.hover', fontWeight: 500 }}
-                                    />
-                                ))}
-                            </Stack>
+                            {cancelamento.itensDetalhados && cancelamento.itensDetalhados.length > 0 ? (
+                                <Stack direction="row" flexWrap="wrap" gap={1}>
+                                    {cancelamento.itensDetalhados.map((item, idx) => (
+                                        <Chip
+                                            key={idx}
+                                            label={`${item.qtd}x ${item.nome}`}
+                                            size="small"
+                                            sx={{ bgcolor: 'action.hover', fontWeight: 500 }}
+                                        />
+                                    ))}
+                                </Stack>
+                            ) : (
+                                <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
+                                    Nenhum item registrado (Mesa vazia).
+                                </Typography>
+                            )}
+
                         </Box>
 
                         {/* Motivo */}
