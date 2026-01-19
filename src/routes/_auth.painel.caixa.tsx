@@ -1,13 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router';
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Typography, Paper, Grid, Stack, CircularProgress, Chip,
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert,
-    Divider, TextField, InputAdornment
+    Box, Typography, Paper, Stack, CircularProgress, Chip,
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+    Divider, IconButton, Tooltip, Menu, MenuItem, ListItemIcon, ListItemText
 } from '@mui/material';
 import {
-    Wallet, TrendingUp, TrendingDown, Lock, Unlock,
-    ArrowRightLeft, DollarSign, Printer, AlertTriangle, Calendar
+    Wallet, TrendingDown, Lock, Unlock, DollarSign,
+    Calendar, Plus, Edit, Coins, MoreVertical, FileText, ChevronDown
 } from 'lucide-react';
 import { collection, query, where, orderBy, onSnapshot, Firestore } from 'firebase/firestore';
 import { db } from '@/lib/api/firebase/config';
@@ -19,251 +19,24 @@ import {
     subscribeToHistorico,
     getDadosRelatorio,
     fecharCaixa,
+    atualizarOperador,
     CaixaSessao,
     Movimentacao,
     RelatorioData
 } from '@/lib/services/caixa';
-import { gerarCupomTexto, imprimirRelatorio } from '@/lib/utils/print-service';
+import { gerarCupomTexto, gerarReciboTrocaOperador, imprimirRelatorio } from '@/lib/utils/print-service';
 
+// Componentes
 import Button from '@/components/ui/button';
-import StyledModal from '@/components/ui/modal';
-import Input from '@/components/forms/input';
+import StatCard from '@/components/layout/caixa/cards/stat-card';
+import AbrirCaixaModal from '@/components/layout/caixa/modals/abrir-caixa-modal';
+import MovimentacaoModal from '@/components/layout/caixa/modals/movimentacao-modal';
+import FecharCaixaModal from '@/components/layout/caixa/modals/fechar-caixa-modal';
+import EditarOperadorModal from '@/components/layout/caixa/modals/editar-operador-modal';
 
 export const Route = createFileRoute('/_auth/painel/caixa')({
     component: CaixaPage,
 })
-
-const StatCard = ({ title, value, icon: Icon, color, subvalue }: any) => (
-    <Paper elevation={0} sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 3, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-        <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
-            <Box>
-                <Typography variant="overline" color="text.secondary" fontWeight={700}>{title}</Typography>
-                <Typography variant="h4" fontWeight={800} sx={{ color: `${color}.main` }}>
-                    {typeof value === 'number' ? `R$ ${value.toFixed(2)}` : value}
-                </Typography>
-            </Box>
-            <Box sx={{ p: 1, borderRadius: 2, bgcolor: `${color}.light`, color: `${color}.main`, opacity: 0.8 }}>
-                <Icon size={24} />
-            </Box>
-        </Box>
-        {subvalue && <Typography variant="caption" color="text.secondary">{subvalue}</Typography>}
-    </Paper>
-);
-
-const AbrirCaixaModal = ({ open, onClose, onConfirm, loading }: any) => {
-    const [valor, setValor] = useState('');
-    return (
-        <StyledModal open={open} onClose={onClose} title="Abertura de Caixa">
-            <Box component="form" onSubmit={(e) => { e.preventDefault(); onConfirm(Number(valor)); }}>
-                <Alert severity="info" sx={{ mb: 3 }}>
-                    Informe o valor em dinheiro presente na gaveta para iniciar o turno.
-                </Alert>
-                <Input
-                    id="abertura-valor" // ID Único
-                    name="valorInicial" // Nome para autofill/form
-                    label="Valor Inicial (R$)"
-                    type="number"
-                    value={valor}
-                    onChange={(e) => setValor(e.target.value)}
-                    autoFocus
-                    fullWidth
-                    required
-                    InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }}
-                />
-                <Box display="flex" justifyContent="flex-end" gap={2} mt={4}>
-                    <Button onClick={onClose} variant="text" color="inherit">Cancelar</Button>
-                    <Button type="submit" loading={loading} variant="contained" startIcon={<Unlock />}>Abrir Caixa</Button>
-                </Box>
-            </Box>
-        </StyledModal>
-    );
-};
-
-const MovimentacaoModal = ({ type, open, onClose, onConfirm, loading }: any) => {
-    const [valor, setValor] = useState('');
-    const [motivo, setMotivo] = useState('');
-    const isSangria = type === 'sangria';
-
-    return (
-        <StyledModal open={open} onClose={onClose} title={isSangria ? "Nova Sangria" : "Novo Suprimento"}>
-            <Box component="form" onSubmit={(e) => { e.preventDefault(); onConfirm(Number(valor), motivo); }}>
-                <Alert severity={isSangria ? "warning" : "success"} icon={isSangria ? <TrendingDown /> : <TrendingUp />} sx={{ mb: 3 }}>
-                    {isSangria
-                        ? "Retirada de dinheiro (ex: pagamento, vale)."
-                        : "Entrada de dinheiro extra (ex: troco)."}
-                </Alert>
-                <Stack spacing={3}>
-                    <Input
-                        id="mov-valor"
-                        name="valorMovimentacao"
-                        label="Valor (R$)"
-                        type="number"
-                        value={valor}
-                        onChange={(e) => setValor(e.target.value)}
-                        fullWidth
-                        required
-                        InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }}
-                    />
-                    <Input
-                        id="mov-motivo"
-                        name="motivoMovimentacao"
-                        label="Motivo / Descrição"
-                        value={motivo}
-                        onChange={(e) => setMotivo(e.target.value)}
-                        fullWidth
-                        required
-                        placeholder={isSangria ? "Ex: Pagamento Fornecedor" : "Ex: Troco adicional"}
-                    />
-                </Stack>
-                <Box display="flex" justifyContent="flex-end" gap={2} mt={4}>
-                    <Button onClick={onClose} variant="text" color="inherit">Cancelar</Button>
-                    <Button type="submit" loading={loading} variant="contained" color={isSangria ? "error" : "success"}>Confirmar</Button>
-                </Box>
-            </Box>
-        </StyledModal>
-    );
-};
-
-const FecharCaixaModal = ({ open, onClose, sessao, onConfirm, loading }: any) => {
-    const [step, setStep] = useState(1);
-    const [relatorio, setRelatorio] = useState<RelatorioData | null>(null);
-    const [confDinheiro, setConfDinheiro] = useState('');
-    const [confCartao, setConfCartao] = useState('');
-    const [obs, setObs] = useState('');
-
-    useEffect(() => {
-        if (open && sessao) {
-            setStep(1);
-            setConfDinheiro('');
-            setConfCartao('');
-            setObs('');
-            getDadosRelatorio(sessao).then(data => {
-                setRelatorio(data);
-                setStep(2);
-            });
-        }
-    }, [open, sessao]);
-
-    const handleConfirm = () => {
-        if (!relatorio) return;
-        const dinheiro = parseFloat(confDinheiro) || 0;
-        const cartao = parseFloat(confCartao) || 0;
-
-        const dadosFinais: RelatorioData = {
-            ...relatorio,
-            fechamento: {
-                dinheiroContado: dinheiro,
-                cartaoPixContado: cartao,
-                totalGeralContado: dinheiro + cartao,
-                diferenca: (dinheiro + cartao) - relatorio.esperado.totalGeral,
-                observacoes: obs
-            }
-        };
-        onConfirm(dadosFinais);
-    };
-
-    const difTotal = relatorio ? ((parseFloat(confDinheiro) || 0) + (parseFloat(confCartao) || 0)) - relatorio.esperado.totalGeral : 0;
-
-    return (
-        <StyledModal open={open} onClose={onClose} title="Fechamento de Caixa">
-            {step === 1 && <Box p={4} textAlign="center"><CircularProgress /> <Typography mt={2}>Consolidando dados...</Typography></Box>}
-
-            {step === 2 && relatorio && (
-                <Box>
-                    <Alert severity="info" sx={{ mb: 3 }}>
-                        Confira os valores na gaveta e na maquineta antes de encerrar.
-                    </Alert>
-
-                    <Grid container spacing={3}>
-                        <Grid size={{ xs: 12, md: 6 }}>
-                            <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover', height: '100%' }}>
-                                <Typography variant="subtitle2" fontWeight={700} gutterBottom color="primary">ESPERADO (SISTEMA)</Typography>
-                                <Stack spacing={1.5} mt={2}>
-                                    <Box display="flex" justifyContent="space-between">
-                                        <Typography variant="body2">Dinheiro (Gaveta):</Typography>
-                                        <Typography variant="body2" fontWeight={700}>R$ {relatorio.esperado.dinheiro.toFixed(2)}</Typography>
-                                    </Box>
-                                    <Box display="flex" justifyContent="space-between">
-                                        <Typography variant="body2">Cartão/Pix:</Typography>
-                                        <Typography variant="body2" fontWeight={700}>R$ {relatorio.esperado.cartaoPix.toFixed(2)}</Typography>
-                                    </Box>
-                                    <Divider sx={{ borderStyle: 'dashed' }} />
-                                    <Box display="flex" justifyContent="space-between">
-                                        <Typography variant="subtitle1" fontWeight={800}>TOTAL:</Typography>
-                                        <Typography variant="subtitle1" fontWeight={800}>R$ {relatorio.esperado.totalGeral.toFixed(2)}</Typography>
-                                    </Box>
-                                </Stack>
-                            </Paper>
-                        </Grid>
-
-                        <Grid size={{ xs: 12, md: 6 }}>
-                            <Typography variant="subtitle2" fontWeight={700} gutterBottom mb={2}>CONFERÊNCIA (REAL)</Typography>
-                            <Stack spacing={2}>
-                                <Input
-                                    id="conf-dinheiro"
-                                    name="dinheiroContado"
-                                    label="Dinheiro Contado"
-                                    type="number"
-                                    value={confDinheiro}
-                                    onChange={(e) => setConfDinheiro(e.target.value)}
-                                    InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }}
-                                    fullWidth
-                                    focused
-                                />
-                                <Input
-                                    id="conf-cartao"
-                                    name="cartaoContado"
-                                    label="Total Maquineta (Cartão+Pix)"
-                                    type="number"
-                                    value={confCartao}
-                                    onChange={(e) => setConfCartao(e.target.value)}
-                                    InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }}
-                                    fullWidth
-                                />
-                            </Stack>
-                        </Grid>
-                    </Grid>
-
-                    <Box sx={{ mt: 3, p: 2, borderRadius: 2, bgcolor: Math.abs(difTotal) < 0.05 ? 'success.light' : difTotal > 0 ? 'info.light' : 'error.light', color: Math.abs(difTotal) < 0.05 ? 'success.dark' : difTotal > 0 ? 'info.dark' : 'error.dark' }}>
-                        <Box display="flex" alignItems="center" gap={2}>
-                            {Math.abs(difTotal) >= 0.05 && <AlertTriangle size={24} />}
-                            <Box flex={1}>
-                                <Typography variant="subtitle2" fontWeight={800}>
-                                    DIFERENÇA: {difTotal > 0 ? '+' : ''}R$ {difTotal.toFixed(2)}
-                                </Typography>
-                                <Typography variant="caption" fontWeight={600}>
-                                    {Math.abs(difTotal) < 0.05 ? 'Caixa batendo corretamente.' : difTotal < 0 ? 'Falta de caixa (Quebra).' : 'Sobra de caixa.'}
-                                </Typography>
-                            </Box>
-                        </Box>
-                    </Box>
-
-                    <TextField
-                        id="fechamento-obs"
-                        name="observacoesFechamento"
-                        label="Observações do Fechamento"
-                        multiline
-                        rows={2}
-                        fullWidth
-                        sx={{ mt: 3 }}
-                        value={obs}
-                        onChange={(e) => setObs(e.target.value)}
-                        placeholder="Justifique diferenças se houver..."
-                    />
-
-                    <Box display="flex" justifyContent="flex-end" gap={2} mt={4}>
-                        <Button onClick={onClose} variant="text" color="inherit">Cancelar</Button>
-                        <Button onClick={handleConfirm} loading={loading} variant="contained" color="primary" startIcon={<Lock />}>
-                            Encerrar Caixa
-                        </Button>
-                    </Box>
-                </Box>
-            )}
-        </StyledModal>
-    );
-};
-
-// --- PÁGINA PRINCIPAL ---
 
 function CaixaPage() {
     const { user } = useUserStore();
@@ -275,48 +48,76 @@ function CaixaPage() {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
 
+    // Menu de Ações
+    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const menuOpen = Boolean(anchorEl);
+
+    // Modais
     const [modalAbertura, setModalAbertura] = useState(false);
     const [modalSangria, setModalSangria] = useState(false);
     const [modalSuprimento, setModalSuprimento] = useState(false);
     const [modalFechamento, setModalFechamento] = useState(false);
+    const [modalOperador, setModalOperador] = useState(false);
 
+    // Métricas
+    const [totalVendas, setTotalVendas] = useState(0);
+    const [totalVendasDinheiro, setTotalVendasDinheiro] = useState(0);
+
+    // --- EFFECTS ---
     useEffect(() => {
         if (!user?.uid) return;
         const q = query(collection(db as Firestore, 'caixa_sessoes'), where('usuarioId', '==', user.uid), where('status', '==', 'aberto'));
-        const unsubscribe = onSnapshot(q, (snap) => {
-            if (!snap.empty) {
-                setSessao({ id: snap.docs[0].id, ...snap.docs[0].data() } as CaixaSessao);
-            } else {
-                setSessao(null);
-            }
+        return onSnapshot(q, (snap) => {
+            setSessao(snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() } as CaixaSessao);
             setLoading(false);
         });
-        return unsubscribe;
     }, [user?.uid]);
 
-    useEffect(() => {
-        const unsubscribe = subscribeToHistorico((data: CaixaSessao[]) => setHistorico(data));
-        return unsubscribe;
-    }, []);
+    useEffect(() => subscribeToHistorico((data: CaixaSessao[]) => setHistorico(data)), []);
 
     useEffect(() => {
         if (!sessao?.id) { setMovimentacoes([]); return; }
         const q = query(collection(db as Firestore, 'caixa_movimentacoes'), where('sessaoId', '==', sessao.id), orderBy('data', 'desc'));
-        const unsubscribe = onSnapshot(q, (snap) => {
-            setMovimentacoes(snap.docs.map(d => ({ id: d.id, ...d.data() } as Movimentacao)));
+
+        return onSnapshot(q, (snap) => {
+            const movs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Movimentacao));
+            setMovimentacoes(movs);
+
+            let vendasDin = 0;
+            let vendasTotal = 0;
+            let totalSangrias = 0;
+            let totalSuprimentos = 0;
+
+            movs.forEach(m => {
+                if (m.tipo === 'venda') {
+                    vendasTotal += m.valor;
+                    if (m.formaPagamento === 'Dinheiro') vendasDin += m.valor;
+                } else if (m.tipo === 'sangria') {
+                    totalSangrias += m.valor;
+                } else if (m.tipo === 'suprimento') {
+                    totalSuprimentos += m.valor;
+                }
+            });
+
+            setTotalVendas(vendasTotal);
+            // Dinheiro Líquido = Vendas Dinheiro + Suprimentos Extras - Sangrias
+            setTotalVendasDinheiro(vendasDin + totalSuprimentos - totalSangrias);
         });
-        return unsubscribe;
     }, [sessao?.id]);
 
-    const handleAbrirCaixa = async (valor: number) => {
+    // --- HANDLERS ---
+    const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => setAnchorEl(event.currentTarget);
+    const handleMenuClose = () => setAnchorEl(null);
+    const handleMenuAction = (action: () => void) => { handleMenuClose(); action(); };
+
+    const handleAbrirCaixa = async (valor: number, operador: string) => {
         if (!user) return;
         setActionLoading(true);
         try {
-            const novoId = await abrirCaixa(user.uid, user.displayName || 'Usuário', valor);
+            const novoId = await abrirCaixa(user.uid, operador, valor);
             setCaixaAberto(novoId);
             setModalAbertura(false);
-        }
-        catch (error) { console.error(error); alert("Erro ao abrir"); } finally { setActionLoading(false); }
+        } catch (error) { console.error(error); alert("Erro ao abrir"); } finally { setActionLoading(false); }
     };
 
     const handleMovimentacao = async (valor: number, motivo: string, tipo: 'sangria' | 'suprimento') => {
@@ -325,8 +126,17 @@ function CaixaPage() {
         try {
             await registrarMovimentacaoManual(sessao.id, user.uid, tipo, valor, motivo);
             if (tipo === 'sangria') setModalSangria(false); else setModalSuprimento(false);
-        }
-        catch (error) { console.error(error); alert("Erro ao registrar movimentação."); } finally { setActionLoading(false); }
+        } catch (error) { console.error(error); alert("Erro ao movimentar"); } finally { setActionLoading(false); }
+    };
+
+    const handleTrocarOperador = async (novoNome: string) => {
+        if (!sessao?.id || !user) return;
+        setActionLoading(true);
+        try {
+            await atualizarOperador(sessao.id, novoNome, user.uid);
+            imprimirRelatorio(gerarReciboTrocaOperador(sessao.usuarioNome, novoNome, new Date()));
+            setModalOperador(false);
+        } catch (error) { console.error(error); alert("Erro ao trocar operador"); } finally { setActionLoading(false); }
     };
 
     const handleImprimirParcial = async () => {
@@ -334,8 +144,9 @@ function CaixaPage() {
         setActionLoading(true);
         try {
             const dados = await getDadosRelatorio(sessao);
-            const texto = gerarCupomTexto(dados, 'PARCIAL', user?.displayName || 'Op');
-            imprimirRelatorio(texto);
+            // Injeta as movimentações atuais para garantir consistência no print
+            const dadosCompletos = { ...dados, movimentacoes: movimentacoes };
+            imprimirRelatorio(gerarCupomTexto(dadosCompletos, 'PARCIAL', sessao.usuarioNome));
         } catch (error) { console.error(error); alert("Erro ao gerar relatório"); } finally { setActionLoading(false); }
     };
 
@@ -343,21 +154,14 @@ function CaixaPage() {
         if (!sessao?.id || !dadosCompletos.fechamento) return;
         setActionLoading(true);
         try {
-            await fecharCaixa(
-                sessao.id,
-                {
-                    dinheiro: dadosCompletos.fechamento.dinheiroContado,
-                    cartao: dadosCompletos.fechamento.cartaoPixContado,
-                    pix: 0,
-                    obs: dadosCompletos.fechamento.observacoes
-                },
-                dadosCompletos
-            );
-
+            await fecharCaixa(sessao.id, {
+                dinheiro: dadosCompletos.fechamento.dinheiroContado,
+                cartao: dadosCompletos.fechamento.cartaoPixContado,
+                pix: 0,
+                obs: dadosCompletos.fechamento.observacoes
+            }, dadosCompletos);
             setCaixaFechado();
-
-            const texto = gerarCupomTexto(dadosCompletos, 'FECHAMENTO', user?.displayName || 'Op');
-            imprimirRelatorio(texto);
+            imprimirRelatorio(gerarCupomTexto(dadosCompletos, 'FECHAMENTO', sessao.usuarioNome));
             setModalFechamento(false);
         } catch (error) { console.error(error); alert("Erro ao fechar caixa."); } finally { setActionLoading(false); }
     };
@@ -365,8 +169,8 @@ function CaixaPage() {
     if (loading) return <Box display="flex" justifyContent="center" mt={10}><CircularProgress /></Box>;
 
     return (
-        <Box sx={{ p: { xs: 2, md: 4 }, pb: 10, maxWidth: 1200, mx: 'auto' }}>
-            <Typography variant="h4" fontWeight={800} sx={{ fontFamily: 'Caveat, cursive', color: 'primary.main', mb: 3 }}>
+        <Box sx={{ p: { xs: 2, md: 4 }, pb: 10, maxWidth: 1200, mx: 'auto', width: '100%' }}>
+            <Typography variant="h4" fontWeight={800} sx={{ fontFamily: 'Caveat, cursive', color: 'primary.main', mb: 3, fontSize: { xs: '1.8rem', sm: '2.2rem' } }}>
                 Controle de Caixa
             </Typography>
 
@@ -377,7 +181,7 @@ function CaixaPage() {
                     </Box>
                     <Typography variant="h5" fontWeight={700} gutterBottom>O caixa está fechado</Typography>
                     <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 400, mb: 4 }}>
-                        Para iniciar as vendas e registrar movimentações, você precisa abrir uma nova sessão de caixa.
+                        Para iniciar as vendas, identifique o operador e informe o fundo de troco.
                     </Typography>
                     <Button variant="contained" size="large" onClick={() => setModalAbertura(true)} startIcon={<Unlock />}>
                         Abrir Caixa Agora
@@ -385,66 +189,125 @@ function CaixaPage() {
                 </Paper>
             ) : (
                 <Box mb={6}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-                        <Stack direction="row" alignItems="center" gap={1}>
-                            <Chip label="SESSÃO ATIVA" color="success" size="small" icon={<Unlock size={14} />} sx={{ fontWeight: 700, px: 1 }} />
-                            <Typography variant="caption" color="text.secondary">
-                                Aberto em: {sessao.dataAbertura?.toDate().toLocaleString()}
-                            </Typography>
+                    {/* CABEÇALHO */}
+                    <Paper elevation={0} variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+                        <Stack direction="row" alignItems="center" gap={2} sx={{ justifyContent: { xs: 'space-between', sm: 'flex-start' } }}>
+                            <Stack direction="row" alignItems="center" gap={2}>
+                                <Chip label="CAIXA ABERTO" color="success" size="small" icon={<Unlock size={14} />} sx={{ fontWeight: 800, px: 1 }} />
+                                <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
+                            </Stack>
+                            <Box>
+                                <Typography variant="caption" color="text.secondary" display="block" lineHeight={1} mb={0.5}>OPERADOR ATUAL</Typography>
+                                <Stack direction="row" alignItems="center" gap={1}>
+                                    <Typography variant="body1" fontWeight={700}>{sessao.usuarioNome}</Typography>
+                                    <Tooltip title="Trocar Operador">
+                                        <IconButton size="small" onClick={() => setModalOperador(true)} sx={{ bgcolor: 'action.hover', width: 24, height: 24 }}><Edit size={14} /></IconButton>
+                                    </Tooltip>
+                                </Stack>
+                            </Box>
                         </Stack>
-                        <Stack direction="row" gap={1} flexWrap="wrap">
-                            <Button variant="outlined" color="secondary" size="small" startIcon={<Printer />} onClick={handleImprimirParcial} loading={actionLoading}>
-                                Rel. Parcial
+                        <Box sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                            <Button variant="contained" color="primary" startIcon={<MoreVertical size={18} />} endIcon={<ChevronDown size={18} />} onClick={handleMenuClick} disabled={actionLoading} fullWidth sx={{ justifyContent: 'space-between' }}>
+                                Ações do Caixa
                             </Button>
-                            <Button variant="outlined" color="error" size="small" startIcon={<TrendingDown />} onClick={() => setModalSangria(true)}>
-                                Sangria
-                            </Button>
-                            <Button variant="outlined" color="success" size="small" startIcon={<TrendingUp />} onClick={() => setModalSuprimento(true)}>
-                                Suprimento
-                            </Button>
-                            <Button variant="contained" color="primary" size="small" startIcon={<Lock />} onClick={() => setModalFechamento(true)}>
-                                Fechar Caixa
-                            </Button>
-                        </Stack>
-                    </Box>
-
-                    <Grid container spacing={2} sx={{ mb: 3 }}>
-                        <Grid size={{ xs: 12, sm: 4 }}>
-                            <StatCard title="SALDO FÍSICO (DINHEIRO)" value={sessao.saldoAtual} icon={DollarSign} color="success" subvalue="Em gaveta" />
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 4 }}>
-                            <StatCard title="FUNDO DE TROCO" value={sessao.valorInicial} icon={Wallet} color="primary" subvalue="Valor inicial" />
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 4 }}>
-                            <StatCard title="MOVIMENTAÇÕES" value={movimentacoes.length} icon={ArrowRightLeft} color="info" subvalue="Registros hoje" />
-                        </Grid>
-                    </Grid>
-
-                    <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-                        <Box sx={{ px: 2, py: 1.5, bgcolor: 'action.selected', borderBottom: '1px solid', borderColor: 'divider' }}>
-                            <Typography variant="subtitle2" fontWeight={700}>Movimentações Recentes</Typography>
+                            <Menu
+                                anchorEl={anchorEl}
+                                open={menuOpen}
+                                onClose={handleMenuClose}
+                                PaperProps={{ elevation: 4, sx: { mt: 1, minWidth: 220, borderRadius: 2 } }}
+                                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                            >
+                                <MenuItem onClick={() => handleMenuAction(handleImprimirParcial)}><ListItemIcon><FileText size={18} /></ListItemIcon><ListItemText>Relatório Parcial</ListItemText></MenuItem>
+                                <Divider />
+                                <MenuItem onClick={() => handleMenuAction(() => setModalSuprimento(true))}><ListItemIcon><Plus size={18} color="green" /></ListItemIcon><ListItemText>Adicionar Dinheiro</ListItemText></MenuItem>
+                                <MenuItem onClick={() => handleMenuAction(() => setModalSangria(true))}><ListItemIcon><TrendingDown size={18} color="red" /></ListItemIcon><ListItemText>Realizar Sangria</ListItemText></MenuItem>
+                                <Divider />
+                                <MenuItem onClick={() => handleMenuAction(() => setModalFechamento(true))}><ListItemIcon><Lock size={18} className="text-primary-main" /></ListItemIcon><ListItemText primaryTypographyProps={{ fontWeight: 700, color: 'primary.main' }}>Fechar Caixa</ListItemText></MenuItem>
+                            </Menu>
                         </Box>
-                        <TableContainer sx={{ maxHeight: 250 }}>
+                    </Paper>
+
+                    {/* CARDS ORGANIZADOS COM STACK (Alternativa ao Grid) */}
+                    <Stack
+                        direction={{ xs: 'column', md: 'row' }}
+                        spacing={3}
+                        sx={{ mb: 3 }}
+                    >
+                        {/* 1. SALDO (SESSÃO) = Vendas Brutas */}
+                        <Box flex={1}>
+                            <StatCard
+                                title="SALDO (SESSÃO)"
+                                value={totalVendas}
+                                icon={DollarSign}
+                                color="success"
+                                subvalue="Total de vendas realizadas"
+                            />
+                        </Box>
+
+                        {/* 2. SUPRIMENTO = Fundo Fixo */}
+                        <Box flex={1}>
+                            <StatCard
+                                title="SUPRIMENTO"
+                                value={sessao.valorInicial}
+                                icon={Lock}
+                                color="primary"
+                                subvalue="Valor inicial (Fixo)"
+                            />
+                        </Box>
+
+                        {/* 3. VENDAS EM ESPÉCIE = Dinheiro Líquido */}
+                        <Box flex={1}>
+                            <StatCard
+                                title="VENDAS EM ESPÉCIE"
+                                value={totalVendasDinheiro}
+                                icon={Coins}
+                                color="info"
+                                secondaryInfo={
+                                    <Box>
+                                        <Typography variant="caption" color="text.secondary">Representatividade:</Typography>
+                                        <Typography variant="caption" display="block" color="text.primary" fontWeight={700}>
+                                            {totalVendas > 0 ? ((totalVendasDinheiro / totalVendas) * 100).toFixed(1) : 0}% do faturamento total
+                                        </Typography>
+                                    </Box>
+                                }
+                            />
+                        </Box>
+                    </Stack>
+
+                    {/* TABELA DE MOVIMENTAÇÕES */}
+                    <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                        <Box sx={{ px: 2, py: 2, bgcolor: 'action.hover', borderBottom: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="subtitle2" fontWeight={700}>Movimentações Recentes</Typography>
+                            <Typography variant="caption" color="text.secondary">Últimos lançamentos</Typography>
+                        </Box>
+                        <TableContainer sx={{ maxHeight: 300 }}>
                             <Table size="small" stickyHeader>
                                 <TableBody>
-                                    {movimentacoes.map((m) => (
-                                        <TableRow key={m.id}>
-                                            <TableCell sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
-                                                {m.data?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip label={m.tipo.toUpperCase()} size="small"
-                                                    color={m.tipo === 'sangria' ? 'error' : m.tipo === 'suprimento' ? 'success' : 'default'}
-                                                    variant="outlined" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700 }}
-                                                />
-                                            </TableCell>
-                                            <TableCell sx={{ fontSize: '0.9rem' }}>{m.descricao}</TableCell>
-                                            <TableCell align="right" sx={{ fontWeight: 600, color: m.tipo === 'sangria' ? 'error.main' : 'success.main' }}>
-                                                {m.tipo === 'sangria' ? '- ' : '+ '}R$ {m.valor.toFixed(2)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {movimentacoes.length === 0 && <TableRow><TableCell colSpan={4} align="center" sx={{ py: 3, color: 'text.secondary' }}>Nenhuma movimentação ainda.</TableCell></TableRow>}
+                                    {movimentacoes.length === 0 ? (
+                                        <TableRow><TableCell colSpan={4} align="center" sx={{ py: 4, color: 'text.secondary' }}>Nenhuma movimentação registrada.</TableCell></TableRow>
+                                    ) : (
+                                        movimentacoes.map((m) => (
+                                            <TableRow key={m.id} hover>
+                                                <TableCell sx={{ color: 'text.secondary', fontSize: '0.8rem', width: 100 }}>
+                                                    {m.data?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </TableCell>
+                                                <TableCell sx={{ width: 120 }}>
+                                                    <Chip label={m.tipo.toUpperCase()} size="small" color={m.tipo === 'sangria' ? 'error' : m.tipo === 'suprimento' ? 'success' : 'default'} variant="outlined" sx={{ height: 22, fontSize: '0.65rem', fontWeight: 800, minWidth: 80 }} />
+                                                </TableCell>
+                                                <TableCell sx={{ fontSize: '0.875rem' }}>{m.descricao || '-'}</TableCell>
+                                                <TableCell align="right">
+                                                    {m.tipo === 'sistema' ? (
+                                                        <Typography variant="caption" color="text.secondary" fontWeight={700}>-</Typography>
+                                                    ) : (
+                                                        <Typography variant="body2" fontWeight={700} color={m.tipo === 'sangria' ? 'error.main' : 'success.main'}>
+                                                            {m.tipo === 'sangria' ? '- ' : '+ '} R$ {m.valor.toFixed(2)}
+                                                        </Typography>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
                                 </TableBody>
                             </Table>
                         </TableContainer>
@@ -454,12 +317,12 @@ function CaixaPage() {
 
             <Divider sx={{ my: 4 }} />
 
+            {/* HISTÓRICO */}
             <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                     <Calendar size={20} className="text-primary-main" />
-                    <Typography variant="h6" fontWeight={700}>Histórico de Sessões</Typography>
+                    <Typography variant="h6" fontWeight={700}>Histórico de Fechamentos</Typography>
                 </Box>
-
                 <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
                     <TableContainer>
                         <Table>
@@ -475,14 +338,11 @@ function CaixaPage() {
                             <TableBody>
                                 {historico.map((h: any) => {
                                     const isOpen = h.status === 'aberto';
-                                    const valorFinalDisplay = h.valorFinal !== undefined ? h.valorFinal : (h.resumoFechamento?.totalGeralContado);
-
+                                    const valorFinalDisplay = h.valorFinal ?? h.resumoFechamento?.totalGeralContado;
                                     return (
                                         <TableRow key={h.id} hover selected={isOpen}>
                                             <TableCell>
-                                                <Typography variant="body2" fontWeight={600}>
-                                                    {h.dataAbertura?.toDate().toLocaleDateString()}
-                                                </Typography>
+                                                <Typography variant="body2" fontWeight={600}>{h.dataAbertura?.toDate().toLocaleDateString()}</Typography>
                                                 <Typography variant="caption" color="text.secondary">
                                                     {h.dataAbertura?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                     {h.dataFechamento ? ` - ${h.dataFechamento.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
@@ -491,18 +351,10 @@ function CaixaPage() {
                                             <TableCell>{h.usuarioNome}</TableCell>
                                             <TableCell align="right">R$ {h.valorInicial.toFixed(2)}</TableCell>
                                             <TableCell align="right">
-                                                {valorFinalDisplay !== undefined
-                                                    ? <Typography variant="body2" fontWeight={700} color="success.main">R$ {Number(valorFinalDisplay).toFixed(2)}</Typography>
-                                                    : <Typography variant="caption" color="text.secondary">--</Typography>
-                                                }
+                                                {valorFinalDisplay !== undefined ? <Typography variant="body2" fontWeight={700} color="success.main">R$ {Number(valorFinalDisplay).toFixed(2)}</Typography> : <Typography variant="caption" color="text.secondary">--</Typography>}
                                             </TableCell>
                                             <TableCell align="center">
-                                                <Chip
-                                                    label={isOpen ? "ABERTO" : "FECHADO"}
-                                                    color={isOpen ? "success" : "default"}
-                                                    size="small"
-                                                    variant={isOpen ? "filled" : "outlined"}
-                                                />
+                                                <Chip label={isOpen ? "ABERTO" : "FECHADO"} color={isOpen ? "success" : "default"} size="small" variant={isOpen ? "filled" : "outlined"} sx={{ fontWeight: 700 }} />
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -514,10 +366,20 @@ function CaixaPage() {
                 </Paper>
             </Box>
 
-            <AbrirCaixaModal open={modalAbertura} onClose={() => setModalAbertura(false)} onConfirm={handleAbrirCaixa} loading={actionLoading} />
+            <AbrirCaixaModal open={modalAbertura} onClose={() => setModalAbertura(false)} onConfirm={handleAbrirCaixa} loading={actionLoading} userNameDefault={user?.displayName} />
             <MovimentacaoModal type="sangria" open={modalSangria} onClose={() => setModalSangria(false)} onConfirm={(v: number, m: string) => handleMovimentacao(v, m, 'sangria')} loading={actionLoading} />
             <MovimentacaoModal type="suprimento" open={modalSuprimento} onClose={() => setModalSuprimento(false)} onConfirm={(v: number, m: string) => handleMovimentacao(v, m, 'suprimento')} loading={actionLoading} />
-            <FecharCaixaModal open={modalFechamento} onClose={() => setModalFechamento(false)} sessao={sessao} onConfirm={handleConfirmarFechamento} loading={actionLoading} />
+
+            {/* Passamos movimentações para o modal de fechamento */}
+            <FecharCaixaModal
+                open={modalFechamento}
+                onClose={() => setModalFechamento(false)}
+                sessao={sessao}
+                onConfirm={handleConfirmarFechamento}
+                loading={actionLoading}
+                movimentacoes={movimentacoes}
+            />
+            {sessao && <EditarOperadorModal open={modalOperador} onClose={() => setModalOperador(false)} onConfirm={handleTrocarOperador} atual={sessao.usuarioNome} loading={actionLoading} />}
         </Box>
     );
 }

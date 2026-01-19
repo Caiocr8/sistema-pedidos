@@ -1,6 +1,7 @@
 import {
     collection, doc, runTransaction, serverTimestamp,
-    query, where, limit, getDocs, onSnapshot, orderBy, Timestamp
+    query, where, limit, getDocs, onSnapshot, orderBy, Timestamp,
+    Transaction
 } from 'firebase/firestore';
 import { db } from '@/lib/api/firebase/config';
 
@@ -22,7 +23,7 @@ export interface CaixaSessao {
 export interface Movimentacao {
     id?: string;
     sessaoId: string;
-    tipo: 'abertura' | 'venda' | 'sangria' | 'suprimento' | 'fechamento';
+    tipo: 'abertura' | 'venda' | 'sangria' | 'suprimento' | 'fechamento' | 'sistema';
     formaPagamento?: string;
     valor: number;
     valorRecebido?: number;
@@ -70,6 +71,27 @@ export interface RelatorioData {
 }
 
 // --- SERVIÇO BLINDADO (TRANSACTIONS) ---
+
+export const atualizarOperador = async (sessaoId: string, novoNome: string, usuarioId: string) => {
+    const caixaRef = doc(db, 'caixa_sessoes', sessaoId);
+    const movRef = doc(collection(db, 'caixa_movimentacoes'));
+
+    await runTransaction(db, async (transaction) => {
+        // Atualiza o nome na sessão
+        transaction.update(caixaRef, { usuarioNome: novoNome });
+
+        // Registra o evento no histórico de movimentações para segurança
+        transaction.set(movRef, {
+            sessaoId,
+            tipo: 'sistema', // Tipo neutro
+            valor: 0,
+            descricao: `Troca de Operador para: ${novoNome}`,
+            data: serverTimestamp(),
+            usuarioId
+        });
+    });
+};
+
 
 export const getCaixaAberto = async (usuarioId: string) => {
     const q = query(

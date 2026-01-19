@@ -9,7 +9,7 @@ import { Plus, Edit, Trash2, Tag, DollarSign, AlignLeft } from 'lucide-react';
 
 // Imports da sua aplicação
 import { useCardapioStore, CardapioItem } from '@/store/cardapioStore';
-import StyledModal from '@/components/ui/modal';
+import Modal from '@/components/ui/modal';
 import Input from '@/components/forms/input';
 import Button from '@/components/ui/button';
 
@@ -230,7 +230,7 @@ function CardapioPage() {
       ))}
 
       {/* Modal de Adicionar/Editar */}
-      <StyledModal
+      <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title={isNewItem ? 'Novo Produto' : 'Editar Produto'}
@@ -316,7 +316,7 @@ function CardapioPage() {
             {isNewItem ? 'Cadastrar Produto' : 'Salvar Alterações'}
           </Button>
         </Stack>
-      </StyledModal>
+      </Modal>
     </Box>
   );
 }

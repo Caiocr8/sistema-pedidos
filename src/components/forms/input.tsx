@@ -3,7 +3,6 @@
 import React from 'react';
 import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
-
 import type { TextFieldProps } from '@mui/material/TextField';
 import { styled } from '@mui/material/styles';
 
@@ -17,7 +16,7 @@ const StyledTextField = styled(TextField)(({ theme }) => ({
     borderRadius: (Number(theme.shape.borderRadius) || 4) * 1.5,
     backgroundColor:
       theme.palette.mode === 'light'
-        ? '#FFF9F2'
+        ? '#FFF9F2' // Fundo suave para light mode
         : theme.palette.background.paper,
     transition: 'all 0.2s ease-in-out',
 
@@ -46,9 +45,7 @@ const StyledTextField = styled(TextField)(({ theme }) => ({
 
       // 🧡 Estilização do autofill (Chrome, Edge, Safari)
       '&:-webkit-autofill': {
-        boxShadow: `0 0 0 1000px ${theme.palette.mode === 'light'
-          ? '#FFF9F2'
-          : theme.palette.background.paper
+        boxShadow: `0 0 0 1000px ${theme.palette.mode === 'light' ? '#FFF9F2' : theme.palette.background.paper
           } inset !important`,
         WebkitTextFillColor: `${theme.palette.text.primary} !important`,
         caretColor: theme.palette.text.primary,

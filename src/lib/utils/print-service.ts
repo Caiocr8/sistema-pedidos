@@ -1,37 +1,35 @@
 import { RelatorioData } from "@/lib/services/caixa";
 
+// CONFIGURAÇÃO DA LARGURA (42 colunas para impressoras 80mm padrão)
+const COL_WIDTH = 42;
+
 // --- UTILITÁRIOS DE FORMATAÇÃO ---
-
-// Formata moeda (R$ 1.230,00)
 const m = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const line = (char = '-', length = COL_WIDTH) => char.repeat(length);
 
-// Cria linhas divisórias
-const line = (char = '-', length = 48) => char.repeat(length);
-
-// Centraliza texto
-const center = (text: string, length = 48) => {
-    const trimmed = text.length > length ? text.substring(0, length) : text;
-    const spaces = Math.max(0, length - trimmed.length);
+const center = (text: string, length = COL_WIDTH) => {
+    const t = text.substring(0, length);
+    const spaces = Math.max(0, length - t.length);
     const padLeft = Math.floor(spaces / 2);
-    return ' '.repeat(padLeft) + trimmed + ' '.repeat(spaces - padLeft);
+    return ' '.repeat(padLeft) + t;
 };
 
-// Cria linha com label à esquerda e valor à direita com preenchimento (ex: "Total ........... 10,00")
-const row = (label: string, value: string, char = '.', length = 48) => {
-    const valueStr = value;
-    const labelStr = label.substring(0, length - valueStr.length - 2); // Corta label se necessário
-    const dots = Math.max(0, length - labelStr.length - valueStr.length - 1);
-    return `${labelStr} ${char.repeat(dots)} ${valueStr}`;
+const row = (label: string, value: string, char = '.', length = COL_WIDTH) => {
+    const valStr = value;
+    const maxLabelLen = length - valStr.length - 2;
+    const labStr = label.substring(0, maxLabelLen);
+    const dots = Math.max(0, length - labStr.length - valStr.length - 1);
+    return `${labStr} ${char.repeat(dots)} ${valStr}`;
 };
 
-// Formata data/hora de objetos Firestore ou Date
 const fmtTime = (dateObj: any) => {
     if (!dateObj) return '--:--';
+    // Suporta tanto Timestamp do Firebase quanto Date nativo
     const date = dateObj.toDate ? dateObj.toDate() : new Date(dateObj);
     return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 };
 
-// --- GERAÇÃO DO RECIBO DE PEDIDO (CLIENTE/COZINHA) ---
+// --- GERAÇÃO DO RECIBO DE PEDIDO (VIA CLIENTE/COZINHA) ---
 export const gerarViasRecibo = (
     pedido: any,
     pagamentos: Record<string, number>,
@@ -41,25 +39,29 @@ export const gerarViasRecibo = (
     desconto?: { valorCalculado: number },
     parcelas?: number
 ) => {
-    const gerarCorpoPedido = () => {
+    const gerarCorpo = () => {
         let txt = '';
-        txt += `Data: ${new Date().toLocaleDateString('pt-BR')}  Hora: ${new Date().toLocaleTimeString('pt-BR')}\n`;
-        txt += `Mesa: ${String(pedido.mesa).padEnd(5)} Pedido: #${pedido.docId.slice(0, 4).toUpperCase()}\n`;
+        txt += `DATA: ${new Date().toLocaleDateString('pt-BR')}  HORA: ${new Date().toLocaleTimeString('pt-BR')}\n`;
+        txt += `PEDIDO: #${pedido.docId ? pedido.docId.slice(0, 4).toUpperCase() : '----'}   MESA: ${String(pedido.mesa || '--').padEnd(4)}\n`;
 
-        if (docCliente && docCliente.trim().length > 0) txt += `${tipoDoc}: ${docCliente}\n`;
-        else txt += `Consumidor não identificado\n`;
+        if (docCliente && docCliente.trim().length > 0) {
+            txt += `${tipoDoc}: ${docCliente}\n`;
+        }
 
         txt += `${line()}\n`;
-        txt += `ITEM                           QTD     TOTAL\n`;
+        txt += `ITEM                     QTD      TOTAL\n`;
         txt += `${line()}\n`;
 
-        pedido.itens.forEach((item: any) => {
-            const totalItem = item.precoUnitario * item.quantidade;
-            const nome = item.nome.substring(0, 28).padEnd(28, ' ');
-            const qtd = String(item.quantidade).padStart(3, ' ');
-            const tot = m(totalItem).padStart(10, ' ');
-            txt += `${nome} ${qtd} ${tot}\n`;
-        });
+        if (pedido.itens) {
+            pedido.itens.forEach((item: any) => {
+                const totalItem = item.precoUnitario * item.quantidade;
+                txt += `${item.nome.substring(0, COL_WIDTH)}\n`;
+                const qtdPreco = `${item.quantidade}x ${m(item.precoUnitario)}`;
+                const totalStr = m(totalItem);
+                txt += row(qtdPreco, totalStr, ' ', COL_WIDTH) + '\n';
+            });
+        }
+
         txt += `${line()}\n`;
 
         const valorOriginal = pedido.valorOriginal || pedido.total;
@@ -71,146 +73,167 @@ export const gerarViasRecibo = (
             txt += `${row('DESCONTO', `-${m(valorDesconto)}`)}\n`;
         }
 
-        txt += `${row('TOTAL A PAGAR', m(totalFinal), ' ')}\n`; // Espaço vazio para destaque
+        txt += `${row('TOTAL A PAGAR', m(totalFinal), ' ')}\n`;
         return txt;
     };
 
     const gerarPagamentos = () => {
         let txt = '';
         txt += `${line()}\n`;
-        txt += `FORMAS DE PAGAMENTO\n`;
+        txt += `PAGAMENTOS\n`;
         Object.entries(pagamentos).forEach(([metodo, valor]) => {
             if (valor > 0) {
                 let label = metodo;
-                if (metodo === 'Cartão Crédito' && parcelas && parcelas > 1) {
-                    label += ` (${parcelas}x)`;
-                }
+                if (metodo === 'Cartão Crédito' && parcelas && parcelas > 1) label += ` (${parcelas}x)`;
                 txt += `${row(label, m(valor))}\n`;
             }
         });
-        if (troco > 0) {
-            txt += `${line('.')}\n`;
-            txt += `${row('TROCO', m(troco))}\n`;
-        }
+        if (troco > 0) txt += `${row('TROCO', m(troco))}\n`;
         return txt;
     };
 
     const viaCliente = () => {
         let txt = '';
-        txt += `${center('MARIA BONITA RESTAURANTE')}\n`;
-        txt += `${center('Recibo de Venda')}\n`;
+        txt += `${center('MARIA BONITA')}\n`;
+        txt += `${center('RECIBO DO CLIENTE')}\n`;
         txt += `${line('=')}\n`;
-        txt += gerarCorpoPedido();
+        txt += gerarCorpo();
         txt += gerarPagamentos();
-        txt += `\n${center('Obrigado pela preferencia!')}\n\n`;
+        txt += `\n${center('Obrigado pela preferencia!')}\n\n.`;
         return txt;
     };
 
     const viaEstabelecimento = () => {
         let txt = '';
-        txt += `${center('CONTROLE INTERNO')}\n`;
+        txt += `${center('VIA INTERNA')}\n`;
         txt += `${line('=')}\n`;
-        txt += gerarCorpoPedido();
+        txt += gerarCorpo();
         txt += gerarPagamentos();
-        txt += `\n\n\n${center('________________________________')}\n${center('Assinatura')}\n\n`;
+        txt += `\n\n\n${center('_'.repeat(30))}\n${center('Assinatura')}\n\n.`;
         return txt;
     };
 
     return { viaCliente: viaCliente(), viaEstabelecimento: viaEstabelecimento() };
 };
 
-// --- GERAÇÃO DO RELATÓRIO DE CAIXA (FECHAMENTO) ---
+// --- GERAÇÃO DO RELATÓRIO DE CAIXA (PARCIAL E FECHAMENTO) ---
 export const gerarCupomTexto = (dados: RelatorioData, tipo: 'PARCIAL' | 'FECHAMENTO', operador: string) => {
-    const { sessao, vendas, esperado, itensVendidos, saidas } = dados;
-    let txt = '';
+    const { sessao, vendas, itensVendidos } = dados;
 
-    // 1. CABEÇALHO
-    txt += `${center('MARIA BONITA RESTAURANTE')}\n`;
-    txt += `${center(tipo === 'FECHAMENTO' ? 'FECHAMENTO DE CAIXA' : 'CONFERENCIA PARCIAL')}\n`;
-    txt += `${line('=')}\n`;
+    // --- LÓGICA DE EXTRAÇÃO DE MOVIMENTAÇÕES ---
+    // Tenta encontrar a lista de movimentações onde quer que ela esteja no objeto
+    let listaMovimentos: any[] = [];
 
-    const abertura = sessao.dataAbertura?.toDate ? sessao.dataAbertura.toDate() : new Date();
-    const fechamento = sessao.dataFechamento?.toDate ? sessao.dataFechamento.toDate() : new Date();
-
-    txt += `OPERADOR : ${operador.toUpperCase()}\n`;
-    txt += `ABERTURA : ${abertura.toLocaleString('pt-BR')}\n`;
-    if (tipo === 'FECHAMENTO') {
-        txt += `FECHAM.  : ${fechamento.toLocaleString('pt-BR')}\n`;
-    } else {
-        txt += `EMISSAO  : ${new Date().toLocaleString('pt-BR')}\n`;
+    // 1. Se foi injetado manualmente (nossa correção no frontend)
+    if ((dados as any).movimentacoes && Array.isArray((dados as any).movimentacoes)) {
+        listaMovimentos = (dados as any).movimentacoes;
     }
-    txt += `${line('=')}\n\n`;
+    // 2. Se o backend retornou dentro de uma propriedade 'lista'
+    else if ((dados as any).movimentacoes?.lista) {
+        listaMovimentos = (dados as any).movimentacoes.lista;
+    }
+    // 3. Fallback: Tenta juntar entradas e saídas separadas
+    else {
+        const listaEntradas = (dados as any).entradas?.lista || [];
+        const listaSaidas = (dados as any).saidas?.lista || [];
+        listaMovimentos = [...listaEntradas, ...listaSaidas];
+    }
 
-    // 2. DETALHAMENTO DE MOVIMENTAÇÕES (SUPRIMENTOS E SANGRIAS)
-
-    // Filtra movimentações da lista "saidas" que contém tudo
-    // Nota: No seu service 'saidas.lista' contém todas as movs manuais (sangria e suprimento)
-    const listaMovimentos = saidas.lista || [];
     const suprimentosLista = listaMovimentos.filter(x => x.tipo === 'suprimento');
     const sangriasLista = listaMovimentos.filter(x => x.tipo === 'sangria');
 
     const totalSuprimentos = suprimentosLista.reduce((acc, curr) => acc + curr.valor, 0);
     const totalSangrias = sangriasLista.reduce((acc, curr) => acc + curr.valor, 0);
 
-    // Bloco Suprimentos
+    let txt = '';
+
+    // 1. CABEÇALHO
+    txt += `${center('MARIA BONITA')}\n`;
+    txt += `${center(tipo === 'FECHAMENTO' ? 'FECHAMENTO DE CAIXA' : 'RELATORIO PARCIAL')}\n`;
+    txt += `${line('=')}\n`;
+
+    const abertura = sessao.dataAbertura?.toDate ? sessao.dataAbertura.toDate() : new Date();
+    const fechamento = sessao.dataFechamento?.toDate ? sessao.dataFechamento.toDate() : new Date();
+
+    txt += `OPERADOR: ${operador.toUpperCase().substring(0, 30)}\n`;
+    txt += `ABERTURA: ${abertura.toLocaleString('pt-BR')}\n`;
+    if (tipo === 'FECHAMENTO') {
+        txt += `FECHAM. : ${fechamento.toLocaleString('pt-BR')}\n`;
+    } else {
+        txt += `EMISSAO : ${new Date().toLocaleString('pt-BR')}\n`;
+    }
+    txt += `${line('=')}\n\n`;
+
+    // 2. ENTRADAS (SUPRIMENTOS)
     if (suprimentosLista.length > 0) {
-        txt += `[+] SUPRIMENTOS (ENTRADAS)\n`;
+        txt += `>>> ENTRADAS (SUPRIMENTOS)\n`;
         suprimentosLista.forEach(s => {
             const hora = fmtTime(s.data);
-            const desc = (s.descricao || 'Sem descrição').substring(0, 25);
-            // Formato: 10:00 - Motivo ............ 50,00
-            txt += `${hora} - ${row(desc, m(s.valor), '.', 38)}\n`;
+            const desc = (s.descricao || 'Suprimento').substring(0, 20);
+            txt += `${hora} ${desc.padEnd(20)} ${m(s.valor).padStart(8)}\n`;
         });
-        txt += `${row('TOTAL SUPRIMENTOS', m(totalSuprimentos), ' ')}\n`;
+        // TOTAL DE ENTRADAS
+        txt += `${row('TOTAL ENTRADAS', m(totalSuprimentos), ' ')}\n`;
         txt += `${line()}\n`;
     }
 
-    // Bloco Sangrias
+    // 3. SAÍDAS (SANGRIAS)
     if (sangriasLista.length > 0) {
-        txt += `[-] SANGRIAS (SAIDAS)\n`;
+        txt += `<<< SAIDAS (SANGRIAS)\n`;
         sangriasLista.forEach(s => {
             const hora = fmtTime(s.data);
-            const desc = (s.descricao || 'Sem descrição').substring(0, 25);
-            txt += `${hora} - ${row(desc, m(s.valor), '.', 38)}\n`;
+            const desc = (s.descricao || 'Sangria').substring(0, 20);
+            txt += `${hora} ${desc.padEnd(20)} ${m(s.valor).padStart(8)}\n`;
         });
-        txt += `${row('TOTAL SANGRIAS', m(totalSangrias), ' ')}\n`;
+        // TOTAL DE SAÍDAS
+        txt += `${row('TOTAL SAIDAS', m(totalSangrias), ' ')}\n`;
         txt += `${line()}\n`;
     }
 
-    // 3. RESUMO DE VENDAS
-    txt += `\n${center('RESUMO DE VENDAS (SISTEMA)')}\n`;
+    // 4. VENDAS (SISTEMA)
+    txt += `\n${center('VENDAS (SISTEMA)')}\n`;
     txt += `${line('-')}\n`;
     txt += `${row('Dinheiro', m(vendas.dinheiro))}\n`;
     txt += `${row('Pix', m(vendas.pix))}\n`;
     txt += `${row('Cartao Credito', m(vendas.credito))}\n`;
     txt += `${row('Cartao Debito', m(vendas.debito))}\n`;
-    if (vendas.outros > 0) txt += `${row('Outros / Voucher', m(vendas.outros))}\n`;
+    if (vendas.outros > 0) txt += `${row('Outros', m(vendas.outros))}\n`;
     txt += `${line()}\n`;
-    txt += `${row('TOTAL BRUTO VENDAS', m(vendas.total), ' ')}\n\n`;
+    txt += `${row('TOTAL VENDIDO', m(vendas.total), ' ')}\n\n`;
 
-    // 4. BALANÇO DO CAIXA (MATEMÁTICA DA GAVETA)
+    // 5. BALANÇO (CONFERENCIA GAVETA)
     txt += `${center('CONFERENCIA GAVETA (DINHEIRO)')}\n`;
     txt += `${line('-')}\n`;
+
     txt += `${row('(+) Saldo Inicial', m(sessao.valorInicial))}\n`;
-    txt += `${row('(+) Vendas em Dinheiro', m(vendas.dinheiro))}\n`;
-    if (totalSuprimentos > 0) txt += `${row('(+) Suprimentos', m(totalSuprimentos))}\n`;
-    if (totalSangrias > 0) txt += `${row('(-) Sangrias', m(totalSangrias))}\n`;
+    txt += `${row('(+) Vendas Dinheiro', m(vendas.dinheiro))}\n`;
+
+    // Sempre mostra as linhas de suprimento/sangria se houver valor > 0
+    if (totalSuprimentos > 0) {
+        txt += `${row('(+) Suprimentos', m(totalSuprimentos))}\n`;
+    }
+
+    if (totalSangrias > 0) {
+        txt += `${row('(-) Sangrias', m(totalSangrias))}\n`;
+    }
+
     txt += `${line()}\n`;
 
-    // Valor que o sistema calcula que deve ter
-    txt += `${row('(=) ESPERADO NA GAVETA', m(esperado.dinheiro), ' ')}\n`;
+    // CÁLCULO VISUAL (Garante que a conta bata com as linhas acima)
+    const esperadoCalculado = (sessao.valorInicial || 0) + vendas.dinheiro + totalSuprimentos - totalSangrias;
 
-    // Se for fechamento, mostra o contado e a diferença
+    txt += `${row('(=) ESPERADO NA GAVETA', m(esperadoCalculado), ' ')}\n`;
+
+    // SEÇÃO EXCLUSIVA DE FECHAMENTO (CONTADO vs ESPERADO)
     if (tipo === 'FECHAMENTO' && dados.fechamento) {
-        txt += `${row('(=) CONTADO PELO OPERADOR', m(dados.fechamento.dinheiroContado), ' ')}\n`;
+        txt += `${row('(=) CONTADO NA GAVETA', m(dados.fechamento.dinheiroContado), ' ')}\n`;
         txt += `${line()}\n`;
 
-        const dif = dados.fechamento.diferenca;
-        const labelDif = dif === 0 ? 'DIFERENCA' : (dif > 0 ? 'SOBRA DE CAIXA' : 'QUEBRA DE CAIXA');
+        const dif = dados.fechamento.dinheiroContado - esperadoCalculado;
+        // Pequena tolerância para float
+        const labelDif = Math.abs(dif) < 0.01 ? 'DIFERENCA' : (dif > 0 ? 'SOBRA (+)' : 'FALTA (-)');
 
-        // Se houver diferença, destaca com asteriscos
-        const valorDifFormatted = (dif > 0 ? '+ ' : '- ') + m(Math.abs(dif));
-        txt += `${row(labelDif, valorDifFormatted, ' ')}\n`;
+        txt += `${row(labelDif, m(Math.abs(dif)), ' ')}\n`;
 
         if (dados.fechamento.observacoes) {
             txt += `\nOBS: ${dados.fechamento.observacoes}\n`;
@@ -219,32 +242,45 @@ export const gerarCupomTexto = (dados: RelatorioData, tipo: 'PARCIAL' | 'FECHAME
         txt += `\n*** CONFERENCIA PARCIAL ***\n`;
     }
 
-    txt += `\n`;
-
-    // 5. ITENS VENDIDOS (RANKING)
+    // 6. ITENS VENDIDOS (RESUMO DE PRODUTOS)
     if (itensVendidos && itensVendidos.length > 0) {
-        txt += `${line('=')}\n`;
-        txt += `${center('DETALHAMENTO DE ITENS')}\n`;
+        txt += `\n${line('=')}\n`;
+        txt += `${center('PRODUTOS VENDIDOS')}\n`;
         txt += `${line('-')}\n`;
-        txt += "QTD   PRODUTO                        TOTAL\n";
-        //      XXXX  XXXXXXXXXXXXXXXXXXXXXXXXXXXX   R$XXXX
+        txt += "QTD   PRODUTO                     TOTAL\n";
 
         itensVendidos.forEach(item => {
-            const qtdStr = `${item.quantidade}x`.padEnd(6);
-            const nomeStr = item.nome.substring(0, 28).padEnd(29);
-            const totalStr = m(item.total).padStart(11);
-
-            txt += `${qtdStr}${nomeStr}${totalStr}\n`;
+            const qtd = `${item.quantidade}x`.padEnd(6);
+            // Corta nome muito grande para não quebrar linha
+            const nome = item.nome.substring(0, 24).padEnd(25);
+            const tot = m(item.total).padStart(11);
+            txt += `${qtd}${nome}${tot}\n`;
         });
-        txt += `${line('=')}\n`;
     }
 
-    txt += `\n\n\n\n.`; // Ponto final para garantir o corte do papel
+    txt += `\n\n\n.`; // Pontos finais para forçar avanço de papel
     return txt;
 };
 
-// --- FUNÇÃO DE IMPRESSÃO ---
+// --- RECIBO DE TROCA DE OPERADOR ---
+export const gerarReciboTrocaOperador = (antigo: string, novo: string, data: Date) => {
+    let txt = '';
+    txt += `${center('MARIA BONITA')}\n`;
+    txt += `${center('TROCA DE OPERADOR')}\n`;
+    txt += `${line('=')}\n`;
+    txt += `DATA: ${data.toLocaleDateString()}  HORA: ${data.toLocaleTimeString()}\n\n`;
+
+    txt += `SAI:    ${antigo.toUpperCase()}\n`;
+    txt += `ENTRA:  ${novo.toUpperCase()}\n`;
+
+    txt += `\n${line('=')}\n`;
+    txt += `\n\n\n${center('_'.repeat(30))}\n${center('Assinatura')}\n\n.`;
+    return txt;
+};
+
+// --- FUNÇÃO DE IMPRESSÃO (IFRAME OCULTO) ---
 export const imprimirRelatorio = (texto: string) => {
+    // Cria iframe invisível
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
@@ -257,25 +293,20 @@ export const imprimirRelatorio = (texto: string) => {
     const doc = iframe.contentWindow?.document;
     if (!doc) return;
 
-    // CSS Otimizado para Impressora Térmica (80mm ou 58mm ajustável)
-    // Usamos 'pre-wrap' para respeitar as quebras de linha e espaços do texto gerado
+    // CSS para impressora térmica
     const style = `
         <style>
-            @page { 
-                size: 80mm auto; 
-                margin: 0mm; 
-            }
+            @page { size: auto; margin: 0mm; }
             body { 
-                width: 72mm; /* Margem de segurança para impressoras de 80mm */
-                margin: 0 auto; 
-                padding: 10px 2px; 
-                font-family: 'Courier New', Courier, monospace; /* Fonte monoespaçada é crucial */
+                margin: 0; 
+                padding: 5px; 
+                font-family: 'Courier New', Courier, monospace; 
                 font-size: 13px; 
-                font-weight: bold;
-                line-height: 1.1;
-                white-space: pre-wrap; 
+                line-height: 1.2; 
+                font-weight: 600; 
+                white-space: pre; 
+                width: 100%;
                 color: #000;
-                background-color: #fff;
             }
         </style>
     `;
@@ -284,13 +315,14 @@ export const imprimirRelatorio = (texto: string) => {
     doc.write(`<html><head><title>Print</title>${style}</head><body>${texto}</body></html>`);
     doc.close();
 
+    // Aguarda renderização e imprime
     iframe.onload = () => {
         setTimeout(() => {
             iframe.contentWindow?.focus();
             iframe.contentWindow?.print();
             setTimeout(() => {
                 document.body.removeChild(iframe);
-            }, 1000);
+            }, 500);
         }, 300);
     };
 };

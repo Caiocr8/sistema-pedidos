@@ -14,8 +14,8 @@ import { gerarCupomTexto, imprimirRelatorio } from '@/lib/utils/print-service';
 
 // Componentes
 import Button from '@/components/ui/button';
-import MetricCard from '@/components/layout/dashboard/metric-card';
-import StyledModal from '@/components/ui/modal';
+import MetricCard from '@/components/layout/dashboard/cards/metric-card';
+import Modal from '@/components/ui/modal';
 import VendasModalContent from '@/components/layout/dashboard/modal/vendas-modal';
 import CanceladosModalContent from '@/components/layout/dashboard/modal/cancelados-modal';
 
@@ -331,13 +331,13 @@ function DashboardPage() {
                 </Box>
             </Paper>
 
-            <StyledModal open={modalOpen === 'vendas'} onClose={() => setModalOpen(null)} title="Análise de Vendas">
+            <Modal open={modalOpen === 'vendas'} onClose={() => setModalOpen(null)} title="Análise de Vendas">
                 <VendasModalContent />
-            </StyledModal>
+            </Modal>
 
-            <StyledModal open={modalOpen === 'cancelados'} onClose={() => setModalOpen(null)} title="Histórico de Cancelamentos">
+            <Modal open={modalOpen === 'cancelados'} onClose={() => setModalOpen(null)} title="Histórico de Cancelamentos">
                 <CanceladosModalContent />
-            </StyledModal>
+            </Modal>
         </Box>
     );
 }

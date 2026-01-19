@@ -11,7 +11,7 @@ import { useCardapioStore, CardapioItem } from '@/store/cardapioStore';
 import { useUserStore } from '@/store/user-store'; // Importando store de usuário
 import { imprimirRelatorio } from '@/lib/utils/print-service'; // Importando serviço de impressão
 import Input from '@/components/forms/input';
-import StyledButton from '@/components/ui/button';
+import Button from '@/components/ui/button';
 import { db } from '@/lib/api/firebase/config';
 
 interface ItemPedido extends CardapioItem { quantidade: number; }
@@ -271,8 +271,8 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
                                     Já existe conta: <strong>R$ {mesaExistente?.total?.toFixed(2)}</strong>. Juntar pedido?
                                 </Typography>
                                 <Stack spacing={1} width="100%">
-                                    <StyledButton variant="contained" color="warning" size="small" fullWidth onClick={adicionarAMesaExistente} loading={saving}>Confirmar</StyledButton>
-                                    <StyledButton variant="outlined" color="error" fullWidth size="small" onClick={() => { setConfirmandoAdicao(false); setSaving(false); }}>Corrigir</StyledButton>
+                                    <Button variant="contained" color="warning" size="small" fullWidth onClick={adicionarAMesaExistente} loading={saving}>Confirmar</Button>
+                                    <Button variant="outlined" color="error" fullWidth size="small" onClick={() => { setConfirmandoAdicao(false); setSaving(false); }}>Corrigir</Button>
                                 </Stack>
                             </Box>
                         )}
@@ -318,9 +318,9 @@ export default function NovoPedidoModal({ onClose }: { onClose?: () => void }) {
                                 <Typography variant="body2" color="text.secondary">Total</Typography>
                                 <Typography variant="h5" fontWeight={800} color="primary.main">R$ {totalPedido.toFixed(2)}</Typography>
                             </Box>
-                            <StyledButton variant="contained" color="success" fullWidth size="large" onClick={handlePreSubmit} loading={saving} disabled={saving || pedidoAtual.length === 0 || !numeroMesa}>
+                            <Button variant="contained" color="success" fullWidth size="large" onClick={handlePreSubmit} loading={saving} disabled={saving || pedidoAtual.length === 0 || !numeroMesa}>
                                 Confirmar e Imprimir
-                            </StyledButton>
+                            </Button>
                         </Box>
                     </Paper>
                 </Box>
