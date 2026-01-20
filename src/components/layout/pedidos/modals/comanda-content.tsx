@@ -4,9 +4,9 @@ import { Plus, Trash2, Ban, CreditCard, Search, X } from 'lucide-react';
 import { doc, updateDoc, Firestore } from 'firebase/firestore';
 import { db } from '@/lib/api/firebase/config';
 import { useUserStore } from '@/store/user-store';
-import { useCardapioStore } from '@/store/cardapioStore';
+import { useCardapioStore } from '@/store/cardapio-store';
 import { cancelarPedido, cancelarItemIndividual } from '@/lib/services/pedidos';
-import { imprimirRelatorio } from '@/lib/utils/print-service';
+import { imprimirPedidoCozinha } from '@/lib/utils/print-service'; // Importação atualizada
 import Button from '@/components/ui/button';
 import Card from '@/components/ui/card';
 import CancelarModal from './cancelar-pedido';
@@ -49,19 +49,20 @@ export default function ComandaContent({ pedido, onClose }: ComandaContentProps)
             const novoTotal = pedido.total + (produto.preco * qtdToAdd);
             await updateDoc(doc(db as Firestore, 'pedidos', pedido.docId), { itens: [...pedido.itens, novoItem], total: novoTotal });
 
-            const txtImpressao = [
-                "--------------------------------",
-                "      ADICAO DE ITEM            ",
-                "--------------------------------",
-                `MESA: ${pedido.mesa}`,
-                `DATA: ${new Date().toLocaleTimeString()}`,
-                `OPER: ${user?.displayName || 'Garçom'}`,
-                "--------------------------------",
-                `+ ${qtdToAdd}x  ${produto.nome}`,
-                "--------------------------------",
-                "\n\n"
-            ].join("\n");
-            imprimirRelatorio(txtImpressao);
+            // USA O SERVIÇO CENTRALIZADO DE IMPRESSÃO
+            imprimirPedidoCozinha(
+                pedido.mesa,
+                [{
+                    nome: produto.nome,
+                    quantidade: qtdToAdd,
+                    // Se houver suporte a obs/adicionais aqui no futuro, passar aqui
+                    observacoes: undefined,
+                    adicionais: undefined
+                }],
+                'ADICAO',
+                user?.displayName || 'Garçom'
+            );
+
             setQtdToAdd(1);
         } catch (error) {
             console.error(error);
@@ -95,11 +96,7 @@ export default function ComandaContent({ pedido, onClose }: ComandaContentProps)
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: { md: '700px' } }}>
-            {/* Header com Card */}
-            <Card
-                sx={{ mb: 3, bgcolor: 'primary.main', color: 'primary.contrastText' }}
-                noPadding
-            >
+            <Card sx={{ mb: 3, bgcolor: 'primary.main', color: 'primary.contrastText' }} noPadding>
                 <Box p={2} display="flex" justifyContent="space-between" alignItems="center">
                     <Stack direction="row" gap={2} alignItems="center">
                         <Box sx={{ bgcolor: 'white', color: 'primary.main', width: 56, height: 56, borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '1.8rem' }}>{pedido.mesa}</Box>

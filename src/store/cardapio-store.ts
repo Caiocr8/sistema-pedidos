@@ -1,4 +1,3 @@
-// app/store/cardapioStore.ts
 import { create } from 'zustand';
 import {
     collection,
@@ -23,15 +22,17 @@ export interface CardapioItem {
     descricao?: string;
     disponivel: boolean;
     docId: string;
+    adicionais?: { nome: string; preco: number }[]; // Novo campo para adicionais
 }
 
 type FirestoreCardapioData = {
-    id?: number | string; // Aceita string também para converter depois
+    id?: number | string;
     nome?: string;
     preco?: number;
     categoria?: string;
     descricao?: string;
     disponivel?: boolean;
+    adicionais?: { nome: string; preco: number }[];
     [key: string]: any;
 };
 
@@ -44,7 +45,7 @@ interface CardapioState {
     saving: boolean;
     checkDbStatusAndInit: () => void;
     initListener: () => void;
-    stopListener: () => void; // Renomeei detach para stop para padronizar
+    stopListener: () => void;
     addItem: (itemData: Omit<CardapioItem, 'id' | 'docId'>) => Promise<number | null>;
     updateItem: (itemId: number, itemData: Partial<Omit<CardapioItem, 'id' | 'docId'>>) => Promise<void>;
     deleteItem: (itemId: number) => Promise<void>;
@@ -58,10 +59,7 @@ export const useCardapioStore = create<CardapioState>((set, get) => ({
     unsubscribe: null,
     saving: false,
 
-    // --- CORREÇÃO AQUI ---
     checkDbStatusAndInit: () => {
-        // Verifica apenas se o DB existe e é um objeto. 
-        // Removemos 'db.constructor.name' que quebrava no deploy.
         if (db && typeof db === 'object') {
             set({ dbReady: true, error: null });
             console.log('Store: DB validado. Iniciando listener...');
@@ -76,20 +74,18 @@ export const useCardapioStore = create<CardapioState>((set, get) => ({
     initListener: () => {
         const { dbReady, unsubscribe } = get();
 
-        // Se o DB ainda não estiver pronto, chama a checagem
         if (!dbReady) {
             get().checkDbStatusAndInit();
             return;
         }
 
-        if (unsubscribe) return; // Já está rodando
+        if (unsubscribe) return;
 
         console.log('Store: Buscando dados do cardápio...');
         set({ loading: true, error: null });
 
         try {
             const cardapioCollectionRef = collection(db as Firestore, 'cardapio');
-            // Tenta usar ordem composta, se falhar por índice, usa ordem simples no catch ou ajusta aqui
             const q = query(cardapioCollectionRef, orderBy('id'));
 
             const unsubscribeFunc = onSnapshot(
@@ -100,7 +96,6 @@ export const useCardapioStore = create<CardapioState>((set, get) => ({
                         const data = docSnapshot.data() as FirestoreCardapioData;
                         const docId = docSnapshot.id;
 
-                        // CORREÇÃO DE DADOS: Garante conversão se o ID vier como string "1"
                         let numericId = 0;
                         if (typeof data.id === 'number') numericId = data.id;
                         else if (typeof data.id === 'string') numericId = parseInt(data.id, 10);
@@ -114,6 +109,7 @@ export const useCardapioStore = create<CardapioState>((set, get) => ({
                                 categoria: data.categoria?.trim() || 'Geral',
                                 descricao: data.descricao?.trim() || '',
                                 disponivel: typeof data.disponivel === 'boolean' ? data.disponivel : true,
+                                adicionais: Array.isArray(data.adicionais) ? data.adicionais : []
                             });
                         }
                     });
@@ -122,7 +118,6 @@ export const useCardapioStore = create<CardapioState>((set, get) => ({
                 },
                 (err) => {
                     console.error('Store: Erro no listener:', err);
-                    // Se o erro for de índice, avisa
                     if (err.message.includes('index')) {
                         set({ error: 'Erro de Índice no Firebase. Verifique o console.', loading: false });
                     } else {

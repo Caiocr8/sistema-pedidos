@@ -120,20 +120,12 @@ export const gerarViasRecibo = (
 export const gerarCupomTexto = (dados: RelatorioData, tipo: 'PARCIAL' | 'FECHAMENTO', operador: string) => {
     const { sessao, vendas, itensVendidos } = dados;
 
-    // --- LÓGICA DE EXTRAÇÃO DE MOVIMENTAÇÕES ---
-    // Tenta encontrar a lista de movimentações onde quer que ela esteja no objeto
     let listaMovimentos: any[] = [];
-
-    // 1. Se foi injetado manualmente (nossa correção no frontend)
     if ((dados as any).movimentacoes && Array.isArray((dados as any).movimentacoes)) {
         listaMovimentos = (dados as any).movimentacoes;
-    }
-    // 2. Se o backend retornou dentro de uma propriedade 'lista'
-    else if ((dados as any).movimentacoes?.lista) {
+    } else if ((dados as any).movimentacoes?.lista) {
         listaMovimentos = (dados as any).movimentacoes.lista;
-    }
-    // 3. Fallback: Tenta juntar entradas e saídas separadas
-    else {
+    } else {
         const listaEntradas = (dados as any).entradas?.lista || [];
         const listaSaidas = (dados as any).saidas?.lista || [];
         listaMovimentos = [...listaEntradas, ...listaSaidas];
@@ -146,8 +138,6 @@ export const gerarCupomTexto = (dados: RelatorioData, tipo: 'PARCIAL' | 'FECHAME
     const totalSangrias = sangriasLista.reduce((acc, curr) => acc + curr.valor, 0);
 
     let txt = '';
-
-    // 1. CABEÇALHO
     txt += `${center('MARIA BONITA')}\n`;
     txt += `${center(tipo === 'FECHAMENTO' ? 'FECHAMENTO DE CAIXA' : 'RELATORIO PARCIAL')}\n`;
     txt += `${line('=')}\n`;
@@ -164,7 +154,6 @@ export const gerarCupomTexto = (dados: RelatorioData, tipo: 'PARCIAL' | 'FECHAME
     }
     txt += `${line('=')}\n\n`;
 
-    // 2. ENTRADAS (SUPRIMENTOS)
     if (suprimentosLista.length > 0) {
         txt += `>>> ENTRADAS (SUPRIMENTOS)\n`;
         suprimentosLista.forEach(s => {
@@ -172,12 +161,10 @@ export const gerarCupomTexto = (dados: RelatorioData, tipo: 'PARCIAL' | 'FECHAME
             const desc = (s.descricao || 'Suprimento').substring(0, 20);
             txt += `${hora} ${desc.padEnd(20)} ${m(s.valor).padStart(8)}\n`;
         });
-        // TOTAL DE ENTRADAS
         txt += `${row('TOTAL ENTRADAS', m(totalSuprimentos), ' ')}\n`;
         txt += `${line()}\n`;
     }
 
-    // 3. SAÍDAS (SANGRIAS)
     if (sangriasLista.length > 0) {
         txt += `<<< SAIDAS (SANGRIAS)\n`;
         sangriasLista.forEach(s => {
@@ -185,12 +172,10 @@ export const gerarCupomTexto = (dados: RelatorioData, tipo: 'PARCIAL' | 'FECHAME
             const desc = (s.descricao || 'Sangria').substring(0, 20);
             txt += `${hora} ${desc.padEnd(20)} ${m(s.valor).padStart(8)}\n`;
         });
-        // TOTAL DE SAÍDAS
         txt += `${row('TOTAL SAIDAS', m(totalSangrias), ' ')}\n`;
         txt += `${line()}\n`;
     }
 
-    // 4. VENDAS (SISTEMA)
     txt += `\n${center('VENDAS (SISTEMA)')}\n`;
     txt += `${line('-')}\n`;
     txt += `${row('Dinheiro', m(vendas.dinheiro))}\n`;
@@ -201,64 +186,43 @@ export const gerarCupomTexto = (dados: RelatorioData, tipo: 'PARCIAL' | 'FECHAME
     txt += `${line()}\n`;
     txt += `${row('TOTAL VENDIDO', m(vendas.total), ' ')}\n\n`;
 
-    // 5. BALANÇO (CONFERENCIA GAVETA)
     txt += `${center('CONFERENCIA GAVETA (DINHEIRO)')}\n`;
     txt += `${line('-')}\n`;
-
     txt += `${row('(+) Saldo Inicial', m(sessao.valorInicial))}\n`;
     txt += `${row('(+) Vendas Dinheiro', m(vendas.dinheiro))}\n`;
 
-    // Sempre mostra as linhas de suprimento/sangria se houver valor > 0
-    if (totalSuprimentos > 0) {
-        txt += `${row('(+) Suprimentos', m(totalSuprimentos))}\n`;
-    }
-
-    if (totalSangrias > 0) {
-        txt += `${row('(-) Sangrias', m(totalSangrias))}\n`;
-    }
+    if (totalSuprimentos > 0) txt += `${row('(+) Suprimentos', m(totalSuprimentos))}\n`;
+    if (totalSangrias > 0) txt += `${row('(-) Sangrias', m(totalSangrias))}\n`;
 
     txt += `${line()}\n`;
-
-    // CÁLCULO VISUAL (Garante que a conta bata com as linhas acima)
     const esperadoCalculado = (sessao.valorInicial || 0) + vendas.dinheiro + totalSuprimentos - totalSangrias;
-
     txt += `${row('(=) ESPERADO NA GAVETA', m(esperadoCalculado), ' ')}\n`;
 
-    // SEÇÃO EXCLUSIVA DE FECHAMENTO (CONTADO vs ESPERADO)
     if (tipo === 'FECHAMENTO' && dados.fechamento) {
         txt += `${row('(=) CONTADO NA GAVETA', m(dados.fechamento.dinheiroContado), ' ')}\n`;
         txt += `${line()}\n`;
-
         const dif = dados.fechamento.dinheiroContado - esperadoCalculado;
-        // Pequena tolerância para float
         const labelDif = Math.abs(dif) < 0.01 ? 'DIFERENCA' : (dif > 0 ? 'SOBRA (+)' : 'FALTA (-)');
-
         txt += `${row(labelDif, m(Math.abs(dif)), ' ')}\n`;
-
-        if (dados.fechamento.observacoes) {
-            txt += `\nOBS: ${dados.fechamento.observacoes}\n`;
-        }
+        if (dados.fechamento.observacoes) txt += `\nOBS: ${dados.fechamento.observacoes}\n`;
     } else {
         txt += `\n*** CONFERENCIA PARCIAL ***\n`;
     }
 
-    // 6. ITENS VENDIDOS (RESUMO DE PRODUTOS)
     if (itensVendidos && itensVendidos.length > 0) {
         txt += `\n${line('=')}\n`;
         txt += `${center('PRODUTOS VENDIDOS')}\n`;
         txt += `${line('-')}\n`;
         txt += "QTD   PRODUTO                     TOTAL\n";
-
         itensVendidos.forEach(item => {
             const qtd = `${item.quantidade}x`.padEnd(6);
-            // Corta nome muito grande para não quebrar linha
             const nome = item.nome.substring(0, 24).padEnd(25);
             const tot = m(item.total).padStart(11);
             txt += `${qtd}${nome}${tot}\n`;
         });
     }
 
-    txt += `\n\n\n.`; // Pontos finais para forçar avanço de papel
+    txt += `\n\n\n.`;
     return txt;
 };
 
@@ -269,18 +233,55 @@ export const gerarReciboTrocaOperador = (antigo: string, novo: string, data: Dat
     txt += `${center('TROCA DE OPERADOR')}\n`;
     txt += `${line('=')}\n`;
     txt += `DATA: ${data.toLocaleDateString()}  HORA: ${data.toLocaleTimeString()}\n\n`;
-
     txt += `SAI:    ${antigo.toUpperCase()}\n`;
     txt += `ENTRA:  ${novo.toUpperCase()}\n`;
-
     txt += `\n${line('=')}\n`;
     txt += `\n\n\n${center('_'.repeat(30))}\n${center('Assinatura')}\n\n.`;
     return txt;
 };
 
+// --- NOVO: IMPRESSÃO DE PEDIDOS PARA COZINHA/BAR ---
+export const imprimirPedidoCozinha = (
+    mesa: string,
+    itens: { nome: string; quantidade: number; observacoes?: string; adicionais?: any[] }[],
+    tipo: 'ABERTURA' | 'ADICAO',
+    operador: string
+) => {
+    let txt = "--------------------------------\n";
+    txt += `      PEDIDO - ${tipo}      \n`;
+    txt += "--------------------------------\n";
+    txt += `MESA: ${mesa}\n`;
+    txt += `DATA: ${new Date().toLocaleString('pt-BR')}\n`;
+    txt += `OPERADOR: ${operador}\n`;
+    txt += "--------------------------------\n";
+    txt += "QTD  ITEM\n";
+
+    itens.forEach(item => {
+        txt += `${item.quantidade}x   ${item.nome}\n`;
+
+        // Verifica e imprime adicionais
+        if (item.adicionais && Array.isArray(item.adicionais) && item.adicionais.length > 0) {
+            item.adicionais.forEach(adc => {
+                const nomeAdc = typeof adc === 'string' ? adc : adc.nome;
+                txt += `      + ${nomeAdc}\n`;
+            });
+        }
+
+        // Verifica e imprime observações
+        if (item.observacoes) {
+            txt += `      (OBS: ${item.observacoes})\n`;
+        }
+    });
+
+    txt += "--------------------------------\n";
+    txt += "\n\n";
+
+    // Chama a função de impressão interna
+    imprimirRelatorio(txt);
+};
+
 // --- FUNÇÃO DE IMPRESSÃO (IFRAME OCULTO) ---
 export const imprimirRelatorio = (texto: string) => {
-    // Cria iframe invisível
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
@@ -293,7 +294,6 @@ export const imprimirRelatorio = (texto: string) => {
     const doc = iframe.contentWindow?.document;
     if (!doc) return;
 
-    // CSS para impressora térmica
     const style = `
         <style>
             @page { size: auto; margin: 0mm; }
@@ -315,7 +315,6 @@ export const imprimirRelatorio = (texto: string) => {
     doc.write(`<html><head><title>Print</title>${style}</head><body>${texto}</body></html>`);
     doc.close();
 
-    // Aguarda renderização e imprime
     iframe.onload = () => {
         setTimeout(() => {
             iframe.contentWindow?.focus();

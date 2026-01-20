@@ -4,6 +4,8 @@ export interface OrderItem {
   price: number;
   quantity: number;
   notes?: string;
+  aditions?: { nome: string; preco: number }[];
+  canceled?: boolean;
 }
 
 export interface Order {
