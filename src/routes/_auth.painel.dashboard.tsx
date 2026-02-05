@@ -1,25 +1,21 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
-import { Box, Paper, Stack, Typography, CircularProgress, Chip, Avatar, LinearProgress, Tooltip as MuiTooltip } from '@mui/material';
-import { ShoppingBag, DollarSign, CircleX, Clock, Star, TrendingUp, TrendingDown, Minus, Printer, Wallet } from 'lucide-react';
+import { Box, Paper, Stack, Typography, CircularProgress, Chip, Avatar, LinearProgress } from '@mui/material';
+import { ShoppingBag, DollarSign, CircleX, Clock, Star, TrendingUp, TrendingDown, Minus, Printer } from 'lucide-react';
 
-// Firebase
 import { db } from '@/lib/api/firebase/config';
-import { collection, query, orderBy, onSnapshot, where, Timestamp, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, Timestamp, getDocs, doc } from 'firebase/firestore';
 
-// Store e Serviços (Integração com Caixa)
 import { useUserStore } from '@/store/user-store';
 import { getCaixaAberto, getDadosRelatorio } from '@/lib/services/caixa';
 import { gerarCupomTexto, imprimirRelatorio } from '@/lib/utils/print-service';
 
-// Componentes
 import Button from '@/components/ui/button';
 import MetricCard from '@/components/layout/dashboard/cards/metric-card';
 import Modal from '@/components/ui/modal';
 import VendasModalContent from '@/components/layout/dashboard/modal/vendas-modal';
 import CanceladosModalContent from '@/components/layout/dashboard/modal/cancelados-modal';
 
-// Tipagem
 interface OrderData {
     id: string;
     mesa: string;
@@ -34,10 +30,9 @@ interface ProductPerformance {
     qtdHoje: number;
     totalHoje: number;
     qtdOntem: number;
-    trend: number; // Diferença (Hoje - Ontem)
+    trend: number;
 }
 
-// Helper de Tempo
 function getMinutesAgo(timestamp: any): number {
     if (!timestamp) return 0;
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -61,140 +56,148 @@ function DashboardPage() {
     const { user } = useUserStore();
     const [modalOpen, setModalOpen] = useState<'vendas' | 'cancelados' | null>(null);
 
-    // Estados de Dados
     const [longRunningOrders, setLongRunningOrders] = useState<OrderData[]>([]);
-    const [metrics, setMetrics] = useState({ vendasHoje: 0, pedidosHoje: 0, canceladosHoje: 0 });
-    const [paymentMetrics, setPaymentMetrics] = useState<Record<string, number>>({});
+
+    // Métricas atualizadas para suportar contagem detalhada
+    const [metrics, setMetrics] = useState({
+        vendasHoje: 0,
+        pedidosHoje: 0,
+        canceladosMesas: 0,
+        canceladosItens: 0
+    });
+
     const [topProducts, setTopProducts] = useState<ProductPerformance[]>([]);
     const [loading, setLoading] = useState(true);
-
     const [generatingReport, setGeneratingReport] = useState(false);
 
     useEffect(() => {
         setLoading(true);
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-
         const todayTs = Timestamp.fromDate(today);
         const yesterdayTs = Timestamp.fromDate(yesterday);
 
-        // QUERIES
-        const qActive = query(collection(db, 'pedidos'), orderBy('createdAt', 'asc'));
-        // Agora buscamos na coleção 'pedidos' com status entregue para estatísticas do dia
-        const qFinishedToday = query(
-            collection(db, 'pedidos'),
-            where('status', '==', 'entregue'),
-            where('createdAt', '>=', todayTs)
-        );
-        const qFinishedYesterday = query(
-            collection(db, 'pedidos'),
-            where('status', '==', 'entregue'),
-            where('createdAt', '>=', yesterdayTs),
-            where('createdAt', '<', todayTs)
-        );
+        // 1. LISTENER CAIXA (Vendas Hoje baseadas na SESSÃO ABERTA)
+        let unsubCaixa = () => { };
+        const setupCaixa = async () => {
+            if (!user?.uid) return;
+            const sessao = await getCaixaAberto(user.uid);
 
-        // Cancelados (podem estar em coleção separada ou na mesma, ajustado para buscar na mesma se for sua arquitetura, ou mantendo a separada se você usa trigger)
-        // Assumindo que cancelados ficam na coleção 'pedidos' com status 'cancelado' ou em 'pedidos_cancelados' se você move. 
-        // Vou manter a lógica original de 'pedidos_cancelados' mas se não tiver dados lá, considere mudar.
-        const qCancelledToday = query(collection(db, 'pedidos_cancelados'), where('cancelledAt', '>=', todayTs));
-
-        // 1. Monitorar Pedidos Ativos (CORREÇÃO AQUI)
-        const unsubActive = onSnapshot(qActive, (snap) => {
-            const longOrders = snap.docs
-                .map(d => ({ id: d.id, ...d.data() } as OrderData))
-                .filter(order => {
-                    // FILTRO CRÍTICO: Ignorar pedidos finalizados ou cancelados
-                    if (order.status === 'entregue' || order.status === 'cancelado' || order.status === 'concluido') {
-                        return false;
+            if (sessao?.id) {
+                unsubCaixa = onSnapshot(doc(db, 'caixas', sessao.id), (snap) => {
+                    if (snap.exists()) {
+                        const dados = snap.data();
+                        // Garante que pega o total de vendas da sessão atual
+                        setMetrics(prev => ({ ...prev, vendasHoje: dados.totalVendas || 0 }));
                     }
-
-                    const minutes = getMinutesAgo(order.createdAt);
-                    return minutes >= 20;
                 });
-            setLongRunningOrders(longOrders);
-        });
+            } else {
+                setMetrics(prev => ({ ...prev, vendasHoje: 0 }));
+            }
+        };
+        setupCaixa();
 
-        // 2. Monitorar Cancelados Hoje
-        const unsubCancelled = onSnapshot(qCancelledToday, (snap) => {
-            setMetrics(prev => ({ ...prev, canceladosHoje: snap.size }));
-        });
+        // 2. PEDIDOS DO DIA (Ativos, Entregues e Cancelados)
+        // Usamos uma única query para o dia de hoje para calcular Métricas de Pedidos e Cancelamentos
+        const qOrdersToday = query(collection(db, 'pedidos'), where('createdAt', '>=', todayTs));
 
-        // 3. Processar Vendas (Hoje vs Ontem)
-        getDocs(qFinishedYesterday).then(snapOntem => {
-            const vendasOntemMap: Record<string, number> = {};
-            snapOntem.forEach(doc => {
-                const itens = doc.data().itens || [];
-                itens.forEach((i: any) => {
-                    vendasOntemMap[i.nome] = (vendasOntemMap[i.nome] || 0) + i.quantidade;
-                });
+        const unsubOrders = onSnapshot(qOrdersToday, (snap) => {
+            let countMesasCanceladas = 0;
+            let countItensCancelados = 0;
+            const activeOrders: OrderData[] = [];
+            const finishedDocs: any[] = [];
+
+            snap.docs.forEach(docSnap => {
+                // CORREÇÃO AQUI: Castamos como 'any' temporariamente para evitar conflito de tipo
+                // e depois construímos o objeto final explicitamente.
+                const rawData = docSnap.data();
+                const docId = docSnap.id;
+
+                // Reconstrói o objeto garantindo que 'id' é o ID do documento
+                const data: OrderData = {
+                    ...rawData,
+                    id: docId,
+                    mesa: rawData.mesa,
+                    total: rawData.total,
+                    status: rawData.status,
+                    createdAt: rawData.createdAt,
+                    itens: rawData.itens || []
+                };
+
+                // A. Lógica de Cancelamento
+                if (data.status === 'cancelado') {
+                    countMesasCanceladas++;
+                } else {
+                    // Se a mesa não tá cancelada, verifica itens cancelados individualmente
+                    if (data.itens && Array.isArray(data.itens)) {
+                        const itensCanc = data.itens.filter((i: any) => i.cancelado === true).length;
+                        countItensCancelados += itensCanc;
+                    }
+                }
+
+                // B. Lógica de Pedidos Ativos (Tempo decorrido)
+                if (data.status !== 'entregue' && data.status !== 'cancelado' && data.status !== 'concluido') {
+                    if (getMinutesAgo(data.createdAt) >= 20) {
+                        activeOrders.push(data);
+                    }
+                }
+
+                // C. Lógica de Ranking (apenas entregues/pagos contam pro ranking visual, opcional)
+                if (data.status === 'entregue' || data.status === 'concluido') {
+                    finishedDocs.push(data);
+                }
             });
 
-            // Listener de Hoje
-            const unsubFinished = onSnapshot(qFinishedToday, (snapHoje) => {
-                let totalVendas = 0;
-                const vendasHojeMap: Record<string, { qtd: number, total: number }> = {};
-                const paymentsMap: Record<string, number> = { 'Pix': 0, 'Dinheiro': 0, 'Cartão': 0, 'Vale': 0 };
+            // Atualiza Estados
+            setMetrics(prev => ({
+                ...prev,
+                canceladosMesas: countMesasCanceladas,
+                canceladosItens: countItensCancelados,
+                pedidosHoje: snap.size
+            }));
 
-                snapHoje.forEach(doc => {
-                    const data = doc.data();
-                    totalVendas += data.total || 0;
+            setLongRunningOrders(activeOrders.sort((a, b) => a.createdAt - b.createdAt));
 
-                    // --- PROCESSAMENTO DE PAGAMENTOS (NOVO) ---
-                    const pags = data.pagamento?.pagamentos || {};
-
-                    if (Object.keys(pags).length > 0) {
-                        Object.entries(pags).forEach(([metodo, valor]) => {
-                            const val = Number(valor);
-                            if (metodo.includes('Pix')) paymentsMap['Pix'] += val;
-                            else if (metodo.includes('Dinheiro')) paymentsMap['Dinheiro'] += val;
-                            else if (metodo.includes('Cartão') || metodo.includes('Crédito') || metodo.includes('Débito')) paymentsMap['Cartão'] += val;
-                            else if (metodo.includes('Vale')) paymentsMap['Vale'] += val;
-                            else paymentsMap['Outros'] = (paymentsMap['Outros'] || 0) + val;
-                        });
-                    } else {
-                        // Fallback
-                        paymentsMap['Cartão'] += data.total;
-                    }
-
-                    // Agregação de Produtos
-                    const itens = data.itens || [];
-                    itens.forEach((i: any) => {
+            // D. Cálculo de Ranking (Top Produtos Hoje)
+            const vendasHojeMap: Record<string, { qtd: number, total: number }> = {};
+            finishedDocs.forEach(data => {
+                (data.itens || []).forEach((i: any) => {
+                    if (!i.cancelado) {
                         if (!vendasHojeMap[i.nome]) vendasHojeMap[i.nome] = { qtd: 0, total: 0 };
                         vendasHojeMap[i.nome].qtd += i.quantidade;
                         vendasHojeMap[i.nome].total += (i.precoUnitario * i.quantidade);
-                    });
+                    }
                 });
-
-                // Top Produtos
-                const productsArray: ProductPerformance[] = Object.entries(vendasHojeMap).map(([nome, dados]) => ({
-                    nome,
-                    qtdHoje: dados.qtd,
-                    totalHoje: dados.total,
-                    qtdOntem: vendasOntemMap[nome] || 0,
-                    trend: dados.qtd - (vendasOntemMap[nome] || 0)
-                }));
-
-                setTopProducts(productsArray.sort((a, b) => b.qtdHoje - a.qtdHoje).slice(0, 5));
-                setPaymentMetrics(paymentsMap);
-
-                setMetrics(prev => ({
-                    ...prev,
-                    vendasHoje: totalVendas,
-                    pedidosHoje: snapHoje.size
-                }));
-                setLoading(false);
             });
 
-            return () => unsubFinished();
+            // Busca dados de ontem para comparação (uma única vez)
+            getDocs(query(collection(db, 'pedidos'), where('status', '==', 'entregue'), where('createdAt', '>=', yesterdayTs), where('createdAt', '<', todayTs)))
+                .then(snapOntem => {
+                    const vendasOntemMap: Record<string, number> = {};
+                    snapOntem.forEach(doc => {
+                        (doc.data().itens || []).forEach((i: any) => {
+                            if (!i.cancelado) vendasOntemMap[i.nome] = (vendasOntemMap[i.nome] || 0) + i.quantidade;
+                        });
+                    });
+
+                    const productsArray: ProductPerformance[] = Object.entries(vendasHojeMap).map(([nome, dados]) => ({
+                        nome,
+                        qtdHoje: dados.qtd,
+                        totalHoje: dados.total,
+                        qtdOntem: vendasOntemMap[nome] || 0,
+                        trend: dados.qtd - (vendasOntemMap[nome] || 0)
+                    }));
+
+                    setTopProducts(productsArray.sort((a, b) => b.qtdHoje - a.qtdHoje).slice(0, 5));
+                    setLoading(false);
+                });
         });
 
         return () => {
-            unsubActive();
-            unsubCancelled();
+            unsubCaixa();
+            unsubOrders();
         };
-    }, []);
-
-    const totalPedidosDia = metrics.pedidosHoje + longRunningOrders.length + metrics.canceladosHoje;
+    }, [user]);
 
     const handleGenerateReport = async () => {
         if (!user?.uid) return;
@@ -218,34 +221,49 @@ function DashboardPage() {
 
     return (
         <Box sx={{ width: '100%' }}>
-            {/* Cards */}
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 3, mb: 4 }}>
+                {/* CARD VENDAS HOJE */}
                 <Box onClick={() => setModalOpen('vendas')} sx={{ cursor: 'pointer' }}>
                     <MetricCard
-                        title="Vendas Hoje"
+                        title="Vendas (Caixa Aberto)"
                         value={`R$ ${metrics.vendasHoje.toFixed(2)}`}
-                        badge="Ver detalhes" icon={DollarSign} iconColor="green" bgColor="success.light" valueColor="success.main"
+                        badge="Ver detalhes"
+                        icon={DollarSign}
+                        iconColor="green"
+                        bgColor="success.light"
+                        valueColor="success.main"
                     />
                 </Box>
 
+                {/* CARD VOLUME TOTAL */}
                 <MetricCard
                     title="Volume Total"
-                    value={totalPedidosDia}
-                    badge="Mesas hoje" icon={ShoppingBag} iconColor="#C68642" bgColor="primary.light" valueColor="primary.main" badgeColor="primary"
+                    value={metrics.pedidosHoje}
+                    badge="Pedidos hoje"
+                    icon={ShoppingBag}
+                    iconColor="#C68642"
+                    bgColor="primary.light"
+                    valueColor="primary.main"
+                    badgeColor="primary"
                 />
 
+                {/* CARD CANCELADOS (Com Detalhes) */}
                 <Box onClick={() => setModalOpen('cancelados')} sx={{ cursor: 'pointer' }}>
                     <MetricCard
                         title="Cancelados Hoje"
-                        value={metrics.canceladosHoje}
-                        badge="Ver motivos" icon={CircleX} iconColor="red" bgColor="error.light" valueColor="error.dark" badgeColor="error"
+                        value={metrics.canceladosMesas + metrics.canceladosItens} // Soma total para destaque
+                        details={`${metrics.canceladosMesas} ${metrics.canceladosMesas === 1 ? 'Mesa' : 'Mesas'} • ${metrics.canceladosItens} ${metrics.canceladosItens === 1 ? 'Item' : 'Itens'}`}
+                        badge="Ver histórico"
+                        icon={CircleX}
+                        iconColor="#d32f2f"
+                        bgColor="error.lighter"
+                        valueColor="error.main"
+                        badgeColor="error"
                     />
                 </Box>
             </Box>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '6fr 6fr' }, gap: 3, mb: 3 }}>
-
-                {/* 1. TOP PRODUTOS */}
                 <Paper elevation={2} sx={{ p: 3 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
                         <Star size={24} color="#C68642" />
@@ -283,7 +301,6 @@ function DashboardPage() {
                     </Stack>
                 </Paper>
 
-                {/* 2. MESAS EM ALERTA */}
                 <Paper elevation={2} sx={{ p: 3, borderLeft: '4px solid', borderColor: 'warning.main' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                         <Stack direction="row" gap={1} alignItems="center">

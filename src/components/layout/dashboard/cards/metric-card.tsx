@@ -1,62 +1,103 @@
-'use client';
-
 import React from 'react';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import Chip from '@mui/material/Chip';
+import { Box, Paper, Typography, alpha, Stack } from '@mui/material';
 import { LucideIcon } from 'lucide-react';
-import Card from '@/components/ui/card';
 
 interface MetricCardProps {
     title: string;
     value: string | number;
     badge?: string;
+    details?: string; // NOVO: Para mostrar "1 Mesa, 1 Item"
     icon: LucideIcon;
-    iconColor: string;
-    bgColor: string;
-    valueColor: string;
-    badgeColor?: 'success' | 'primary' | 'info' | 'warning' | 'error';
-    onClick?: () => void;
+    iconColor?: string;
+    bgColor?: string;
+    valueColor?: string;
+    badgeColor?: "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning";
 }
 
 export default function MetricCard({
     title,
     value,
     badge,
+    details,
     icon: Icon,
-    iconColor,
-    bgColor,
-    valueColor,
-    badgeColor = 'success',
-    onClick
+    iconColor = 'primary.main',
+    bgColor = 'primary.lighter',
+    valueColor = 'text.primary',
+    badgeColor = 'primary'
 }: MetricCardProps) {
     return (
-        <Card
-            hoverEffect={!!onClick}
-            onClick={onClick}
-            sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+        <Paper
+            elevation={0}
+            sx={{
+                p: 2.5,
+                borderRadius: 3,
+                border: '1px solid',
+                borderColor: 'divider',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 4px 20px 0 rgba(0,0,0,0.08)',
+                    borderColor: 'transparent'
+                }
+            }}
         >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                 <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block', fontWeight: 600, textTransform: 'uppercase' }}>
+                    <Typography variant="subtitle2" color="text.secondary" fontWeight={600} mb={0.5}>
                         {title}
                     </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: valueColor, mb: 0.5, lineHeight: 1 }}>
+                    <Typography variant="h4" fontWeight={800} color={valueColor}>
                         {value}
                     </Typography>
-                    {badge && (
-                        <Chip
-                            label={badge}
-                            size="small"
-                            color={badgeColor}
-                            sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, mt: 1 }}
-                        />
+
+                    {/* NOVO: Exibição do detalhe logo abaixo do valor */}
+                    {details && (
+                        <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ mt: 0.5, display: 'block' }}>
+                            {details}
+                        </Typography>
                     )}
                 </Box>
-                <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: bgColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={24} color={iconColor} />
+
+                <Box
+                    sx={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        bgcolor: bgColor,
+                        color: iconColor
+                    }}
+                >
+                    <Icon size={24} />
                 </Box>
             </Box>
-        </Card>
+
+            {badge && (
+                <Box mt="auto">
+                    <Stack direction="row" alignItems="center" gap={0.5}>
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                bgcolor: alpha(iconColor.startsWith('#') ? iconColor : '#000', 0.1),
+                                color: iconColor,
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1,
+                                fontWeight: 700,
+                                fontSize: '0.7rem'
+                            }}
+                        >
+                            {badge}
+                        </Typography>
+                    </Stack>
+                </Box>
+            )}
+        </Paper>
     );
 }

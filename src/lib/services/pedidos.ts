@@ -12,7 +12,8 @@ import {
     getDocs,
     increment,
     orderBy,
-    getDoc
+    getDoc,
+    Timestamp
 } from 'firebase/firestore';
 
 // Tipos
@@ -78,6 +79,7 @@ export const atualizarPedido = async (id: string, itens: OrderItem[], total: num
 //  CANCELAMENTO DE ITEM INDIVIDUAL
 // ============================================================================
 
+
 export const cancelarItemIndividual = async (
     pedidoId: string,
     pedidoAtual: any,
@@ -85,25 +87,32 @@ export const cancelarItemIndividual = async (
     motivo: string
 ) => {
     try {
-        const pedidoRef = doc(db, PEDIDOS_COLLECTION, pedidoId);
+        const pedidoRef = doc(db, 'pedidos', pedidoId);
 
-        // 1. Identificar item e calcular novo total
-        const itemRemovido = pedidoAtual.itens[itemIndex];
-        const valorRemocao = itemRemovido.precoUnitario * itemRemovido.quantidade;
-        const novoTotal = Math.max(0, pedidoAtual.total - valorRemocao);
+        // 1. Clona o array de itens para não alterar a referência original
+        const novosItens = [...pedidoAtual.itens];
+        const itemAlvo = novosItens[itemIndex];
 
-        // 2. Filtrar array removendo o item pelo índice
-        const novosItens = pedidoAtual.itens.filter((_: any, index: number) => index !== itemIndex);
+        // 2. Calcula o valor a ser descontado
+        const valorDesconto = itemAlvo.precoUnitario * itemAlvo.quantidade;
 
-        // 3. Atualizar no banco
+        // 3. Marca o item como cancelado no objeto (mantém no array)
+        novosItens[itemIndex] = {
+            ...itemAlvo,
+            cancelado: true,             // Flag principal
+            motivoCancelamento: motivo,  // Motivo
+            canceladoEm: Timestamp.now() // Data
+        };
+
+        // 4. Calcula o novo total do pedido (subtrai o valor do item cancelado)
+        const novoTotal = Math.max(0, (pedidoAtual.total || 0) - valorDesconto);
+
+        // 5. Atualiza o documento na coleção 'pedidos' existente
         await updateDoc(pedidoRef, {
             itens: novosItens,
             total: novoTotal,
             updatedAt: serverTimestamp()
         });
-
-        // Opcional: Registrar em logs de auditoria se desejar
-        // await addDoc(collection(db, 'logs_cancelamentos'), { ... })
 
     } catch (error) {
         console.error("Erro ao cancelar item:", error);
