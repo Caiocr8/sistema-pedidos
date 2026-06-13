@@ -31,6 +31,7 @@ const fmtTime = (dateObj: any) => {
 
 // --- GERAÇÃO DO RECIBO DE PEDIDO (VIA CLIENTE/COZINHA) ---
 // --- GERAÇÃO DO RECIBO DE PEDIDO (VIA CLIENTE/COZINHA) ---
+// --- GERAÇÃO DO RECIBO DE PEDIDO (VIA CLIENTE/COZINHA) ---
 export const gerarViasRecibo = (
     pedido: any,
     pagamentos: Record<string, number>,
@@ -40,18 +41,17 @@ export const gerarViasRecibo = (
     desconto?: { valorCalculado: number },
     parcelas?: number
 ) => {
-    // 1. Isola a lógica do número do pedido (tenta pegar o sequencial, senão usa o docId)
-    const numPedido = pedido.numero
-        ? String(pedido.numero).padStart(3, '0')
-        : (pedido.docId ? pedido.docId.slice(0, 4).toUpperCase() : '----');
+    // 1. Define o número do pedido para ser exatamente o número da mesa
+    const numPedido = pedido.mesa ? String(pedido.mesa) : '----';
 
     // 2. Bloco HTML para forçar o tamanho da fonte na impressora
+    // Se preferir, você pode mudar o texto de "PEDIDO #" para "MESA #" aqui embaixo
     const destaquePedidoHTML = `<div style="font-size: 26px; font-weight: 900; text-align: center; margin: 10px 0;">PEDIDO #${numPedido}</div>\n`;
 
     const gerarCorpo = () => {
         let txt = '';
         txt += `DATA: ${new Date().toLocaleDateString('pt-BR')}  HORA: ${new Date().toLocaleTimeString('pt-BR')}\n`;
-        // O pedido foi removido daqui e deixamos apenas a MESA, já que o pedido agora tem destaque gigante
+        // Mantive a linha da mesa caso ainda queira a impressão normal abaixo, mas pode remover se achar redundante
         txt += `MESA: ${String(pedido.mesa || '--').padEnd(4)}\n`;
 
         if (docCliente && docCliente.trim().length > 0) {
@@ -59,7 +59,7 @@ export const gerarViasRecibo = (
         }
 
         txt += `${line()}\n`;
-        txt += `ITEM                    QTD      TOTAL\n`;
+        txt += `ITEM                    QTD       TOTAL\n`;
         txt += `${line()}\n`;
 
         if (pedido.itens) {
